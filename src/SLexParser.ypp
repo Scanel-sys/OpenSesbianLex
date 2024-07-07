@@ -24,7 +24,7 @@
 %defines
 
 %start PROGRAM 
-%token DIGIT DOT EXP_LETTER FLOAT_EXP
+%token DIGIT DOT FLOAT_EXP
 %token IF ELSE WHILE DO FOR RETURN
 %token EQ LE GE NE
 %token AND OR 
