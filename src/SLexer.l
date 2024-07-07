@@ -48,24 +48,18 @@ double          { BeginToken(yytext); return DOUBLE; }
 bool            { BeginToken(yytext); return BOOL; }
 void            { BeginToken(yytext); return VOID; }
 ==              { BeginToken(yytext); return EQ; }
-[<][=]          { BeginToken(yytext); return LE; }
+"<="            { BeginToken(yytext); return LE; }
 >=              { BeginToken(yytext); return GE; }
 !=              { BeginToken(yytext); return NE; }
 &&              { BeginToken(yytext); return AND; }
 [|][|]          { BeginToken(yytext); return OR;  }
 
-[0-9]+          { 
+[0-9]           { 
                   BeginToken(yytext);
                   yylval = (int)*yytext;
-                  return NUM;
+                  return DIGIT;
                 }
-
-[a-zA-Z_][a-zA-Z0-9_]*  {
-                          BeginToken(yytext); 
-                          yylval = (int)*yytext;
-                          return ID;
-                        }
-
+                
 ["]             { 
                   BeginToken(yytext);
                   yylval = (int)*""; 
@@ -102,10 +96,25 @@ void            { BeginToken(yytext); return VOID; }
 
 [ \t\r\n]       BeginToken(yytext); // whitespace
 
-[-{};()=<>+*/!,]  { 
+[eE][+-]{0,1}[0-9]+ {
+                  BeginToken(yytext); 
+                  return FLOAT_EXP;
+}
+
+"."             {
+                  BeginToken(yytext);
+                  return DOT;
+}
+
+[-{};()=<>+*/!,] { 
                     BeginToken(yytext);
                     return *yytext; 
                   }
+[a-zA-Z_][a-zA-Z0-9_]*  {
+                          BeginToken(yytext); 
+                          yylval = (int)*yytext;
+                          return ID;
+                        }
 
 .               {
                   BeginToken(yytext);

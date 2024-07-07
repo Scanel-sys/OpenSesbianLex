@@ -23,11 +23,12 @@
 %}
 %defines
 
-%start PROGRAM
+%start PROGRAM 
+%token DIGIT DOT EXP_LETTER FLOAT_EXP
 %token IF ELSE WHILE DO FOR RETURN
 %token EQ LE GE NE
 %token AND OR 
-%token STRING NUM ID
+%token STRING ID
 %token PRINT
 %token INT CHAR FLOAT DOUBLE VOID BOOL
 %%
@@ -36,6 +37,22 @@ PROGRAM: OPS
 
 OPS:    OP
 |       OPS OP
+
+
+INT_NUM: DIGITS
+DIGITS:  DIGIT
+|        DIGITS DIGIT
+
+FLOAT_NUM: 
+         DIGITS FLOAT_EXP
+|        DIGITS DOT
+|        DIGITS DOT DIGITS
+|               DOT DIGITS
+|        DIGITS DOT        FLOAT_EXP      
+|        DIGITS DOT DIGITS FLOAT_EXP 
+|               DOT DIGITS FLOAT_EXP  
+
+
 
 OP:     BODY
 |       ';'
@@ -133,7 +150,8 @@ EXPR_MUL:
 |       EXPR_MUL '%' VAL
 
 VAL: 
-    NUM
+    INT_NUM
+|   FLOAT_NUM
 |   STRING
 |   UNARY VAL
 |   '(' EXPR ')' 
