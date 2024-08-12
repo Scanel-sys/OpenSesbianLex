@@ -1,3 +1,8 @@
 # examples
 NUM_CALC
 example
+
+# Runtime gen files
+src/*.tab.*
+src/lex.yy.c
+src/OpenSLex.exe
