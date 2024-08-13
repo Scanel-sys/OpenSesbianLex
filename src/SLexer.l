@@ -35,6 +35,8 @@
                     BeginToken(yytext); 
                   }
 if              { BeginToken(yytext); return IF; }
+include         { BeginToken(yytext); return INCLUDE; }
+define          { BeginToken(yytext); return DEFINE; }
 else            { BeginToken(yytext); return ELSE; }
 for             { BeginToken(yytext); return FOR; }
 while           { BeginToken(yytext); return WHILE; }
