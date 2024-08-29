@@ -1,0 +1,6 @@
+#include <stdio.h>
+#include "SesbianLex"
+
+#define A 2
+#define hello print("Hello\n")
+;

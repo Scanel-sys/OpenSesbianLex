@@ -28,12 +28,19 @@
 %token IF ELSE WHILE DO FOR RETURN
 %token EQ LE GE NE
 %token AND OR 
+%token INCLUDE DEFINE
 %token STRING ID
 %token PRINT
 %token INT CHAR FLOAT DOUBLE VOID BOOL
 %%
 
-PROGRAM: OPS
+PROGRAM: DIRECTIVES OPS
+
+DIRECTIVES:
+|       DIRECTIVES '#' INCLUDE '<' ID '>' 
+|       DIRECTIVES '#' INCLUDE STRING
+|       DIRECTIVES '#' INCLUDE '<' ID DOT ID '>' 
+|       DIRECTIVES '#' DEFINE ID VAL
 
 OPS:    OP
 |       OPS OP
@@ -59,9 +66,9 @@ OP:     BODY
 |       EXPR ';'
 |       IF '(' EXPR ')' '{' OPS '}'
 |       IF '(' EXPR ')' '{' OPS '}' ELSE '{' OPS '}'
-|       FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' OP
-|       WHILE '(' EXPR ')' OP
-|       DO OP WHILE '(' EXPR ')' ';'
+|       FOR_OP
+|       WHILE_OP
+|       DO_WHILE_OP
 |       RETURN ';'
 |       RETURN FUNCTOR ';'
 |       VAR_DECL    ';'
@@ -70,6 +77,12 @@ OP:     BODY
 |       EXPR error OP           { yyerrok; }
 |       error OP                { yyerrok; }
 |       VAR_DECL error ';'      { yyerrok; }
+
+FOR_OP: FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' OP
+
+WHILE_OP: WHILE '(' EXPR ')' OP
+
+DO_WHILE_OP: DO OP WHILE '(' EXPR ')' ';'
 
 FOR_EXPR_1:
 |   EXPR
