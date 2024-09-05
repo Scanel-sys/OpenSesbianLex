@@ -2,7 +2,7 @@ char password = "passwrd";
 print("Enter password\n");
 int res;
 
-void func(int a, bool b);
+void func(int a, char b);
 
 int q = -7;
 
@@ -30,8 +30,6 @@ for( int a = 2; a < 3; a = a + 3) // Неверная запись цикла fo
 zxc 
 
 for(;;); // Многострочная ошибка
-
-bool bool; // Неверное объявление переменной
 
 do
 {

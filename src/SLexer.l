@@ -47,7 +47,6 @@ int             { BeginToken(yytext); return INT; }
 char            { BeginToken(yytext); return CHAR; }
 float           { BeginToken(yytext); return FLOAT; }
 double          { BeginToken(yytext); return DOUBLE; }
-bool            { BeginToken(yytext); return BOOL; }
 void            { BeginToken(yytext); return VOID; }
 ==              { BeginToken(yytext); return EQ; }
 "<="            { BeginToken(yytext); return LE; }

@@ -31,7 +31,7 @@
 %token INCLUDE DEFINE
 %token STRING ID
 %token PRINT
-%token INT CHAR FLOAT DOUBLE VOID BOOL
+%token INT CHAR FLOAT DOUBLE VOID
 %%
 
 PROGRAM: DIRECTIVES OPS
@@ -110,7 +110,6 @@ TYPES:
 |       FLOAT
 |       DOUBLE
 |       VOID
-|       BOOL
 
 cmp_symbols:
         EQ 
