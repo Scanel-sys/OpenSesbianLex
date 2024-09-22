@@ -48,6 +48,12 @@ char            { BeginToken(yytext); return CHAR; }
 float           { BeginToken(yytext); return FLOAT; }
 double          { BeginToken(yytext); return DOUBLE; }
 void            { BeginToken(yytext); return VOID; }
+typedef         { BeginToken(yytext); return TYPEDEF; }
+__global        { BeginToken(yytext); return GLOBAL; }
+__local         { BeginToken(yytext); return LOCAL; }
+__constant      { BeginToken(yytext); return CONSTANT; }
+__private       { BeginToken(yytext); return PRIVATE; }
+__kernel        { BeginToken(yytext); return KERNEL; }
 ==              { BeginToken(yytext); return EQ; }
 "<="            { BeginToken(yytext); return LE; }
 >=              { BeginToken(yytext); return GE; }

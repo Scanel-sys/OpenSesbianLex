@@ -28,10 +28,11 @@
 %token IF ELSE WHILE DO FOR RETURN
 %token EQ LE GE NE
 %token AND OR 
-%token INCLUDE DEFINE
+%token INCLUDE DEFINE TYPEDEF // Нужен struct и указатели с массивами
 %token STRING ID
 %token PRINT
 %token INT CHAR FLOAT DOUBLE VOID
+%token GLOBAL LOCAL CONSTANT PRIVATE KERNEL
 %%
 
 PROGRAM: DIRECTIVES OPS
@@ -41,6 +42,10 @@ DIRECTIVES:
 |       DIRECTIVES '#' INCLUDE STRING
 |       DIRECTIVES '#' INCLUDE '<' ID DOT ID '>' 
 |       DIRECTIVES '#' DEFINE ID VAL
+|       DIRECTIVES '#' DEFINE ID '(' MACR ')' EXPR
+|       DIRECTIVES '#' DEFINE ID '(' MACR ')' FOR_MACR
+|       DIRECTIVES '#' DEFINE ID '(' MACR ')' WHILE_MACR
+|       DIRECTIVES '#' DEFINE ID '(' MACR ')' DO_WHILE_MACR
 
 OPS:    OP
 |       OPS OP
@@ -84,6 +89,12 @@ WHILE_OP: WHILE '(' EXPR ')' OP
 
 DO_WHILE_OP: DO OP WHILE '(' EXPR ')' ';'
 
+FOR_MACR: FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' '{' MACR '}'
+
+WHILE_MACR: WHILE '(' EXPR ')' '{' MACR '}'
+
+DO_WHILE_MACR: DO '{' MACR '}' WHILE '(' EXPR ')'
+
 FOR_EXPR_1:
 |   EXPR
 |   VAR_DECL
@@ -111,6 +122,12 @@ TYPES:
 |       DOUBLE
 |       VOID
 
+ADDR_QUAL:
+        GLOBAL
+|       LOCAL
+|       CONSTANT
+|       PRIVATE
+
 cmp_symbols:
         EQ 
 |       NE 
@@ -123,10 +140,16 @@ cmp_symbols:
 FUNCTION_DECL: 
         TYPES ID FUNCTION_DECL_FUNCTOR BODY
 |       TYPES ID FUNCTION_DECL_FUNCTOR ';'
+|       KERNEL TYPES ID FUNCTION_DECL_FUNCTOR BODY
+|       KERNEL TYPES ID FUNCTION_DECL_FUNCTOR ';'
+|       ADDR_QUAL /*POINTER*/ TYPES ID FUNCTION_DECL_FUNCTOR BODY // Допустимо только для указателей
+|       ADDR_QUAL /*POINTER*/ TYPES ID FUNCTION_DECL_FUNCTOR ';' // Аналогично верхнему
 
 VAR_DECL:
         TYPES ID
+|       ADDR_QUAL /*POINTER*/ TYPES ID // Только для указателей (в том числе массивов)
 |       TYPES ID '=' EXPR
+|       ADDR_QUAL /*POINTER*/ TYPES ID '=' EXPR // Только для указателей (в том числе массивов)
 
 FUNCTION:
     PRINT
@@ -134,7 +157,7 @@ FUNCTION:
 
 FUNCTION_DECL_FUNCTOR: '(' DECL_ARGS ')'
 DECL_ARGS: | DECL_ARG | DECL_ARGS ',' DECL_ARG
-DECL_ARG:  VAR_DECL 
+DECL_ARG:  VAR_DECL // Исправить, т. к. недопустима конструкция типа void func(int x = 5) и т. д.
 
 
 FUNCTOR: '(' ARGS ')'
@@ -160,6 +183,10 @@ EXPR_MUL:
 |       EXPR_MUL '*' VAL 
 |       EXPR_MUL '/' VAL
 |       EXPR_MUL '%' VAL
+
+MACR:
+|       ID
+|       MACR ',' ID
 
 VAL: 
     INT_NUM

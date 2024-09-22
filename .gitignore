@@ -6,3 +6,4 @@ example
 src/*.tab.*
 src/lex.yy.c
 src/OpenSLex.exe
+build/OpenSLex.exe
