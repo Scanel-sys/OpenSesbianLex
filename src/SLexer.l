@@ -49,6 +49,8 @@ float           { BeginToken(yytext); return FLOAT; }
 double          { BeginToken(yytext); return DOUBLE; }
 void            { BeginToken(yytext); return VOID; }
 typedef         { BeginToken(yytext); return TYPEDEF; }
+union           { BeginToken(yytext); return UNION; }
+struct          { BeginToken(yytext); return STRUCT; }
 __global        { BeginToken(yytext); return GLOBAL; }
 __local         { BeginToken(yytext); return LOCAL; }
 __constant      { BeginToken(yytext); return CONSTANT; }
