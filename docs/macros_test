@@ -1,0 +1,4 @@
+#define sum(a, b) a + b
+#define Foo(x) do {x} while(1)
+#define Bar(x) Foo(x)
+;
