@@ -1,0 +1,18 @@
+struct name
+{
+	int a, b;
+};
+
+
+struct name_1{
+	char ch;
+};
+
+int func()
+{
+	struct name
+	{
+		int a, b;
+	};
+
+}

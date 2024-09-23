@@ -32,7 +32,7 @@
 %token UNION STRUCT
 %token STRING ID
 %token PRINT
-%token INT CHAR FLOAT DOUBLE VOID
+%token CONST INT CHAR FLOAT DOUBLE VOID
 %token GLOBAL LOCAL CONSTANT PRIVATE KERNEL
 %%
 
@@ -52,14 +52,14 @@ OPS:    OP
 |       OPS OP
 
 
-STRUCT_UNION_DEF:
-        STRUCT_UNION_TYPES ID '{' VAR_DECLS '}' ';'
-|       STRUCT_UNION_TYPES ID '{' VAR_DECLS '}' ID ';'
+STRUCT_UNION_DEFI:
+        STRUCT_UNION_TYPES ID '{' VAR_DEFIS '}'
+|       STRUCT_UNION_TYPES ID '{' VAR_DEFIS '}' ID
+
 
 STRUCT_UNION_DECL:
         STRUCT_UNION_TYPES ID ID '=' '{' ARGS '}'
-|       STRUCT_UNION_TYPES ID ID ';'
-
+|       STRUCT_UNION_TYPES ID ID
 
 INT_NUM: DIGITS
 DIGITS:  DIGIT
@@ -74,24 +74,26 @@ FLOAT_NUM:
 |        DIGITS DOT DIGITS FLOAT_EXP 
 |               DOT DIGITS FLOAT_EXP  
 
+POINTER: '*' | POINTER '*'
 
-
-OP:     BODY
-|       ';'
+OP:     
+        ';'
 |       EXPR ';'
 |       IF '(' EXPR ')' '{' OPS '}'
 |       IF '(' EXPR ')' '{' OPS '}' ELSE '{' OPS '}'
 |       FOR_OP
 |       WHILE_OP
 |       DO_WHILE_OP
-|       RETURN ';'
-|       RETURN FUNCTOR ';'
-|       VAR_DECL    ';'
-|       FUNCTION_DECL
+|       RETURN                  ';'
+|       RETURN FUNCTOR          ';'
+|       VAR_DEFI                ';'
+|       STRUCT_UNION_DEFI       ';'
+|       VAR_DECL
+|       FUNCTION_DECL_DEFI
 |       FOR error ';'           { yyerrok; }
 |       EXPR error OP           { yyerrok; }
 |       error OP                { yyerrok; }
-|       VAR_DECL error ';'      { yyerrok; }
+|       VAR_DEFI error ';'      { yyerrok; }
 
 
 FOR_OP: FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' OP
@@ -107,9 +109,8 @@ WHILE_MACR: WHILE '(' EXPR ')' '{' MACR '}'
 DO_WHILE_MACR: DO '{' MACR '}' WHILE '(' EXPR ')'
 
 FOR_EXPR_1:
-|   VAR_DECL
+|   VAR_DEFI
 |   FOR_EXPR_1 ',' VAR_ASSIGN
-
 
 
 FOR_EXPR_2:
@@ -151,42 +152,71 @@ cmp_symbols:
 |       '>' 
 |       '<' 
 
-
-FUNCTION_DECL: 
+FUNCTION_DECL_DEFI: 
         TYPES ID FUNCTION_DECL_FUNCTOR BODY
 |       TYPES ID FUNCTION_DECL_FUNCTOR ';'
-|       KERNEL TYPES ID FUNCTION_DECL_FUNCTOR BODY
-|       KERNEL TYPES ID FUNCTION_DECL_FUNCTOR ';'
-|       ADDR_QUAL /*POINTER*/ TYPES ID FUNCTION_DECL_FUNCTOR BODY // Допустимо только для указателей
-|       ADDR_QUAL /*POINTER*/ TYPES ID FUNCTION_DECL_FUNCTOR ';' // Аналогично верхнему
+|       KERNEL VOID ID FUNCTION_DECL_FUNCTOR BODY
+|       KERNEL VOID ID FUNCTION_DECL_FUNCTOR ';'
+|       ADDR_QUAL TYPES POINTER ID FUNCTION_DECL_FUNCTOR BODY 
+|       ADDR_QUAL TYPES POINTER ID FUNCTION_DECL_FUNCTOR ';'
+|                 TYPES POINTER ID FUNCTION_DECL_FUNCTOR BODY 
+|                 TYPES POINTER ID FUNCTION_DECL_FUNCTOR ';'
 
-VAR_DECL: 
-        TYPES ID
-|       ADDR_QUAL /*POINTER*/ TYPES ID // Только для указателей (в том числе массивов)
-|       TYPES ID '=' EXPR
-|       ADDR_QUAL /*POINTER*/ TYPES ID '=' EXPR // Только для указателей (в том числе массивов)
-|       TYPES VAR_ASSIGNS
+
+ID_VAL_PART:
+        VAR_ASSIGN
+|       ID
+|       ID_VAL_PART ',' ID
+|       ID_VAL_PART ',' VAR_ASSIGN
+
+VAR_DECL:
+        TYPES VAR_ASSIGNS
+|       PTR_DECL
 |       STRUCT_UNION_DECL
-|       STRUCT_UNION_DEF
 
-VAR_DECLS:
-        VAR_DECL ';'
-|       VAR_DECLS VAR_DECL ';'
+PTR_DECL:
+                        TYPES POINTER VAR_ASSIGN
+|       ADDR_QUAL       TYPES POINTER VAR_ASSIGN
+|                 CONST TYPES POINTER VAR_ASSIGN
+|       ADDR_QUAL CONST TYPES POINTER VAR_ASSIGN
 
-VAR_DEFI: TYPES VAR_ASSIGN
+
 VAR_ASSIGN: ID '=' EXPR
 VAR_ASSIGNS:
         VAR_ASSIGN
 |       VAR_ASSIGNS ',' VAR_ASSIGN
+
+VAR_DEFI: 
+                        TYPES         ID_VAL_PART
+|       ADDR_QUAL       TYPES POINTER ID_VAL_PART
+|                       TYPES POINTER ID_VAL_PART
+|                 CONST TYPES         ID_VAL_PART
+|       ADDR_QUAL CONST TYPES POINTER ID_VAL_PART
+|                 CONST TYPES POINTER ID_VAL_PART
+
+VAR_DEFIS:
+        VAR_DEFI ';'
+|       VAR_DEFIS VAR_DEFI ';'
+
+
+FUNC_VAR_DEFI: 
+                        TYPES         ID
+|       ADDR_QUAL       TYPES POINTER ID
+|                       TYPES POINTER ID
+|                 CONST TYPES         ID
+|       ADDR_QUAL CONST TYPES POINTER ID
+|                 CONST TYPES POINTER ID
+
+FUNC_VAR_DEFIS:
+        FUNC_VAR_DEFI
+|       FUNC_VAR_DEFIS ',' FUNC_VAR_DEFI
 
 
 FUNCTION:
     PRINT
 
 FUNCTION_DECL_FUNCTOR: '(' DECL_ARGS ')'
-DECL_ARGS: | DECL_ARG | DECL_ARGS ',' DECL_ARG
-
-DECL_ARG:  VAR_DECL // Исправить, т. к. недопустима конструкция типа void func(int x = 5) и т. д.
+DECL_ARGS: | FUNC_VAR_DEFIS | DECL_ARGS ',' FUNC_VAR_DEFIS
 
 FUNCTOR: '(' ARGS ')'
 

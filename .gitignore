@@ -2,8 +2,9 @@
 NUM_CALC
 example
 
-# Runtime gen files
+# Runtime gen files & folders
 src/*.tab.*
 src/lex.yy.c
 src/OpenSLex.exe
-build/OpenSLex.exe
+
+build

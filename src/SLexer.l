@@ -47,6 +47,7 @@ int             { BeginToken(yytext); return INT; }
 char            { BeginToken(yytext); return CHAR; }
 float           { BeginToken(yytext); return FLOAT; }
 double          { BeginToken(yytext); return DOUBLE; }
+const           { BeginToken(yytext); return CONST; }
 void            { BeginToken(yytext); return VOID; }
 typedef         { BeginToken(yytext); return TYPEDEF; }
 union           { BeginToken(yytext); return UNION; }
