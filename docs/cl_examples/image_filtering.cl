@@ -86,19 +86,17 @@ __kernel void filterImage(const unsigned int maskSize,
 
     if(outSum < 0){
         outputImg[index] = 0;
-    } else if(outSum > 255){
-        outputImg[index] = 255;
-    }
-    else{
+    } else 
+    {   
+        if(outSum > 255){
+            outputImg[index] = 255;
+        }
+        else{
         outputImg[index] = outSum;
+        }
     }
 }
 
-/**
- * This kernel function efficiently convolves an image input_image[imgWidth, imgHeight]
- * with a mask of size maskSize by caching submatrices from the input image 
- * in the device local memory.
- */
 
 __kernel void filterImageWithCache(const unsigned int maskSize,
                             __global unsigned char* inputImg,
@@ -206,7 +204,8 @@ __kernel void filterImageWithCache(const unsigned int maskSize,
 
     if(outSum < 0){
         outputImg[index] = 0;
-    } else if(outSum > 255){
+    } else if(outSum > 255)
+    {
         outputImg[index] = 255;
     } else{
         outputImg[index] = outSum;

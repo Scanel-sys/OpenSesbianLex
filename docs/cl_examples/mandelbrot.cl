@@ -21,5 +21,5 @@ __kernel void solve_mandelbrot(__global float const * real,
     }
 
     // Write Results to Output Arrays
-    result[i] = x * x + y * y <= 2 * 2 ? -1 : n;
+    result[i] = x * x + y * y <= 2 * 2;
 }

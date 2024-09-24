@@ -27,7 +27,7 @@ __kernel void add_numbers(__global float4* data,
 
    float sum;
    float4 input1, input2, sum_vector; // array of 4 floats which support vectorization
-   uint global_addr, local_addr;
+   unsigned int global_addr, local_addr;
 
    global_addr = get_global_id(0) * 2;
    input1 = data[global_addr];
@@ -40,7 +40,7 @@ __kernel void add_numbers(__global float4* data,
    barrier(CLK_LOCAL_MEM_FENCE);
 
    if(get_local_id(0) == 0) {
-      sum = 0.0f;
+      sum = 0.0;
       for(int i=0; i<get_local_size(0); i++) {
          sum += local_result[i];
       }
