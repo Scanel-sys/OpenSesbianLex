@@ -21,6 +21,8 @@ static int nTokenLength = 0;
 static int nTokenNextStart = 0;
 static int lMaxBuffer = 1000;
 static char *buffer;
+extern int yylineno;
+int err = false;
 
 static int getNextLine(void);
 
@@ -56,8 +58,8 @@ char *dumpString(char *s) {
     return buf;
 }
 
-extern
 void PrintError(const char *errorstring, ...) {
+    err = true;
     static char errmsg[10000];
     va_list args;
 
@@ -76,13 +78,15 @@ void PrintError(const char *errorstring, ...) {
     }
     else {
         fprintf(stdout, "...... !");
-        for (i=1; i<start; i++)
-        fprintf(stdout, ".");
+        if(start != 1)
+        {
+            for (i=0; i<start; i++)
+            fprintf(stdout, ".");
+        }
         for (i=start; i<=end; i++)
         fprintf(stdout, "^");
-        for (i=end+1; i<lBuffer; i++)
-        fprintf(stdout, ".");
-        fprintf(stdout, "   token %d:%d\n", start, end);
+        
+        fprintf(stdout, "\n");
     }
 /* */
 
@@ -92,7 +96,7 @@ void PrintError(const char *errorstring, ...) {
     vsprintf(errmsg, errorstring, args);
     va_end(args);
 
-    fprintf(stdout, "Error: %s\n", errmsg);
+    fprintf(stdout, "Error: %s at line %d\n", errmsg, yylineno);
     
     for (i = 1; i < 71; i++)
         fprintf(stdout, " "); 
@@ -104,34 +108,17 @@ void PrintError(const char *errorstring, ...) {
  * 
  * dumps the contents of the current row
  *------------------------------------------------------------------*/
-extern
 void DumpRow(void) {
+        if(!err)
+    {
+        fprintf(stderr, "\nError(s) occured while parsing:\n\n");
+    }
+    
     fprintf(stdout, "%6d |%.*s", nRow, lBuffer, buffer);
 }
 
-extern
-void PrintSeparateLine(std::string msg){
-    int i;
-    if(!msg.empty())
-    {
-        fprintf(stdout, "%s", msg.c_str());
-
-        if(msg.length() < PREAMBULA_SIZE)
-        {
-            for(i = 0; i < PREAMBULA_SIZE - msg.length(); i++)
-                fprintf(stdout, " ");
-        }
-        fprintf(stdout, "|");
-    }
-    else
-        fprintf(stdout, "       |");
-    for (i = 1; i < 71; i++)
-        fprintf(stdout, "-"); 
-    fprintf(stdout, "\n"); 
-}
-
-extern
-void BeginToken(char *t) {
+void BeginToken(char *t) 
+{
     /*================================================================*/
     /* remember last read token --------------------------------------*/
     nTokenStart = nTokenNextStart;
@@ -150,22 +137,22 @@ void BeginToken(char *t) {
                             yylloc.first_column,
                             yylloc.last_column, nTokenNextStart);
     }
-    }
+}
 
-    /*--------------------------------------------------------------------
-    * GetNextChar
-    * 
-    * reads a character from input for flex
-    *------------------------------------------------------------------*/
-    extern
-    int GetNextChar(char *b, int maxBuffer) {
+/*--------------------------------------------------------------------
+* GetNextChar
+* 
+* reads a character from input for flex
+*------------------------------------------------------------------*/
+int GetNextChar(char *b, int maxBuffer) 
+{
     int frc;
-    
+
     /*================================================================*/
     /*----------------------------------------------------------------*/
     if (  eof  )
         return 0;
-    
+
     /*================================================================*/
     /* read next line if at the end of the current -------------------*/
     while (  nBuffer >= lBuffer  ) {
@@ -214,7 +201,7 @@ int getNextLine(void) {
 
     nRow += 1;
     lBuffer = strlen(buffer);
-    // DumpRow();                    // print all file lines
+    //DumpRow();                    // print all file lines
 
     /*================================================================*/
     /* that's it -----------------------------------------------------*/
@@ -226,19 +213,23 @@ int main(int argc, char *argv[])
 {
     char *infile = argv[1];
     file = fopen(infile, "r");
-    buffer = (char *)malloc(lMaxBuffer);
+    buffer = (char*)malloc(lMaxBuffer);
     if (  buffer == NULL  ) {
         printf("cannot allocate %d bytes of memory\n", lMaxBuffer);
         fclose(file);
-        return 12;
+        return 1;
     }
-    PrintSeparateLine("start");
     
     if (  getNextLine() == 0  )
         yyparse();
     
     free(buffer);
     fclose(file);
-    PrintSeparateLine("exit");
-    return 0;
+
+    if(!err)
+    {
+        printf("PASS\n");
+    }
+
+    return err;
 }
