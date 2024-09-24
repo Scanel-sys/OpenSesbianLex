@@ -82,6 +82,7 @@ NONFUNC_OP:
 |       STRUCT_UNION_DEFI       ';'
 |       VAR_DECL                ';'
 |       VAR_ASSIGN              ';'
+|       TYPEDEFS
 |       FUNCTION_DECL_DEFI
 |       error NONFUNC_OP        { yyerrok; }
 |       VAR_DEFI error ';'      { yyerrok; }
@@ -119,6 +120,9 @@ FUNC_OPS:
         FUNC_OP
 |       FUNC_OPS FUNC_OP
 
+TYPEDEFS:
+        TYPEDEF STRUCT_UNION_TYPES '{' VAR_DEFIS '}' ID ';'
+|       TYPEDEF TYPES ID ';'
 
 FOR_OP: FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' FUNC_OPS
 

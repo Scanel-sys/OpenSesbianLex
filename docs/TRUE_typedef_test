@@ -1,0 +1,17 @@
+typedef struct
+{
+    int a, b;
+    char c;
+    float** d;
+}babube;
+
+typedef struct
+{
+    int a, b;
+    char c;
+    float** d;
+}bubeba;
+
+typedef int INTEGER;
+
+typedef char BYTE;
