@@ -28,7 +28,7 @@
 %token IF ELSE WHILE DO FOR RETURN
 %token EQ LE GE NE
 %token AND OR 
-%token INCLUDE DEFINE TYPEDEF
+%token INCLUDE DEFINE TYPEDEF IFDEF IFNDEF ENDIF
 %token UNION STRUCT
 %token STRING ID
 %token PRINT
@@ -50,6 +50,9 @@ DIRECTIVES:
 |       DIRECTIVES '#' DEFINE ID '(' MACR ')' DO_WHILE_MACR
 
 
+IF_DEF:
+        '#' IFDEF VAL NONFUNC_OPS '#' ENDIF
+|       '#' IFNDEF VAL NONFUNC_OPS '#' ENDIF
 
 
 STRUCT_UNION_DEFI:
@@ -83,6 +86,7 @@ NONFUNC_OP:
 |       VAR_DECL                ';'
 |       VAR_ASSIGN              ';'
 |       TYPEDEFS
+|       IF_DEF
 |       FUNCTION_DECL_DEFI
 |       error NONFUNC_OP        { yyerrok; }
 |       VAR_DEFI error ';'      { yyerrok; }
