@@ -1,0 +1,12 @@
+struct test
+{
+    int a, b;
+    char c;
+    float** d;
+}babube;
+
+union un
+{
+    int a;
+    char c;
+};

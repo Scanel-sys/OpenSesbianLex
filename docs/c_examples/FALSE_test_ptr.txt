@@ -1,0 +1,12 @@
+int* a = 3;
+
+const char* str = "babube";
+
+const char* str_1 = str;
+
+__private void* func(__local int* a, __global float* b)
+{
+	__constant __private int* ptr;
+}
+
+__kernel void func_1();

@@ -37,6 +37,9 @@
 if              { BeginToken(yytext); return IF; }
 include         { BeginToken(yytext); return INCLUDE; }
 define          { BeginToken(yytext); return DEFINE; }
+ifdef           { BeginToken(yytext); return IFDEF; }
+ifndef          { BeginToken(yytext); return IFNDEF; }
+endif           { BeginToken(yytext); return ENDIF; }
 else            { BeginToken(yytext); return ELSE; }
 for             { BeginToken(yytext); return FOR; }
 while           { BeginToken(yytext); return WHILE; }
@@ -46,7 +49,17 @@ print           { BeginToken(yytext); return PRINT; }
 int             { BeginToken(yytext); return INT; }
 char            { BeginToken(yytext); return CHAR; }
 float           { BeginToken(yytext); return FLOAT; }
+float2           { BeginToken(yytext); return FLOAT; }
+float3           { BeginToken(yytext); return FLOAT; }
+float4           { BeginToken(yytext); return FLOAT; }
+float8           { BeginToken(yytext); return FLOAT; }
+float16           { BeginToken(yytext); return FLOAT; }
+float32           { BeginToken(yytext); return FLOAT; }
 double          { BeginToken(yytext); return DOUBLE; }
+const           { BeginToken(yytext); return CONST; }
+unsigned  { BeginToken(yytext); return UNSIGNED; }
+long      { BeginToken(yytext); return LONG; }
+short     { BeginToken(yytext); return SHORT; }
 void            { BeginToken(yytext); return VOID; }
 typedef         { BeginToken(yytext); return TYPEDEF; }
 union           { BeginToken(yytext); return UNION; }
@@ -105,10 +118,70 @@ __kernel        { BeginToken(yytext); return KERNEL; }
 
 [ \t\r\n]       BeginToken(yytext); // whitespace
 
-[eE][+-]{0,1}[0-9]+ {
+([0-9]+[eE][+-]{0,1}[0-9]+)|([0-9]*"."[0-9]*([eE][+-]{0,1}[0-9]+)?)"f"? {
                   BeginToken(yytext); 
-                  return FLOAT_EXP;
+                  return FLOAT_NUM;
 }
+
+
+"size_t" {
+          BeginToken(yytext); 
+          return SIZE_T;
+}
+
+"-=" {
+      BeginToken(yytext); 
+      return MIN_IS;
+}
+"*=" {
+      BeginToken(yytext); 
+      return MUL_IS;
+}
+
+"/=" {
+      BeginToken(yytext); 
+      return DIV_IS; 
+}
+
+"&=" {
+      BeginToken(yytext); 
+      return AND_IS;
+}
+
+"|=" {
+      BeginToken(yytext); 
+      return OR_IS;
+}
+
+"%=" {
+      BeginToken(yytext); 
+      return MOD_IS;
+}
+
+"^=" {
+      BeginToken(yytext); 
+      return XOR_IS;
+}
+
+"~=" {
+      BeginToken(yytext); 
+      return TILDA_IS;
+}
+
+"+="  {
+        BeginToken(yytext); 
+        return PLUS_IS;
+      }
+
+"++"  {
+        BeginToken(yytext); 
+        return INCR;
+      }
+
+"--"  {
+        BeginToken(yytext); 
+        return DECR;
+      }
 
 "."             {
                   BeginToken(yytext);
@@ -123,6 +196,12 @@ __kernel        { BeginToken(yytext); return KERNEL; }
                           BeginToken(yytext); 
                           yylval = (int)*yytext;
                           return ID;
+                        }
+
+[a-zA-Z_][a-zA-Z0-9_]*"."[a-zA-Z0-9_]+  {
+                          BeginToken(yytext); 
+                          yylval = (int)*yytext;
+                          return STRUCT_ID;
                         }
 
 .               {

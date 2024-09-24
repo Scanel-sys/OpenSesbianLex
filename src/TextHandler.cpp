@@ -214,7 +214,7 @@ int getNextLine(void) {
 
     nRow += 1;
     lBuffer = strlen(buffer);
-    DumpRow();                    // print all file lines
+    // DumpRow();                    // print all file lines
 
     /*================================================================*/
     /* that's it -----------------------------------------------------*/

@@ -1,0 +1,59 @@
+char password = "passwrd";
+int res;
+
+void func(int a, char b);
+
+void func(int a, int b)
+{
+    qwe === 2; // Неверная запись оператора присваивания
+}
+
+int main()
+{
+    print("Enter password\n");
+
+    int q = -7;
+
+    int t = g = c = 4 * 2;
+
+    int x = func(4, 0);
+
+    for( int a = 2; a < 3; a = a + 3) // Неверная запись цикла for()
+    {
+        for (int b = 1; b > -5; b = b - 1)
+        {
+            d = (b - a) * x;
+        }
+    }
+
+    for( int a = 2; a < 3; a = a + 3) // Неверная запись цикла for()
+    {
+
+    }
+
+    zxc 
+
+    for(;;); // Многострочная ошибка
+
+    do
+    {
+        b = a + 3;
+        b = b ** 2; // Неверное арифметическое выражение
+    }while(1);
+
+    while(res != 0)
+    {
+        print("OKAY\\n"); // Неверная escape-последовательность
+    }
+
+    if(!res)
+    {
+        print("Access denied!\n");
+    }
+    else
+    {
+        print("Access granted!\n");
+    }
+
+    return (print("OK"); // Неверная последовательность открывающих и закрывающих скобок
+}

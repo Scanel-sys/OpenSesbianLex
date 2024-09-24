@@ -24,81 +24,176 @@
 %defines
 
 %start PROGRAM 
-%token DIGIT DOT FLOAT_EXP
+%token DIGIT DOT
 %token IF ELSE WHILE DO FOR RETURN
 %token EQ LE GE NE
 %token AND OR 
-%token INCLUDE DEFINE TYPEDEF // Нужен struct и указатели с массивами
+%token INCLUDE DEFINE TYPEDEF IFDEF IFNDEF ENDIF
 %token UNION STRUCT
-%token STRING ID
+%token STRING ID STRUCT_ID
 %token PRINT
-%token INT CHAR FLOAT DOUBLE VOID
+%token CONST VOID
+%token INT CHAR FLOAT DOUBLE SIZE_T
 %token GLOBAL LOCAL CONSTANT PRIVATE KERNEL
+%token INCR DECR PLUS_IS MIN_IS MUL_IS DIV_IS AND_IS OR_IS MOD_IS XOR_IS TILDA_IS
+%token UNSIGNED LONG SHORT 
+%token FLOAT_NUM
 %%
 
-PROGRAM: DIRECTIVES OPS
+PRETYPES:
+        UNSIGNED
+|       LONG
+|       SHORT
+
+TYPES_EXT:
+        ID
+|       PRETYPES ID
+|       ID PRETYPES
+|       PRETYPES
+|       CONST ID
+|       CONST PRETYPES ID
+|       CONST ID PRETYPES
+|       CONST PRETYPES
+|       ID           CONST
+|       PRETYPES ID  CONST
+|       ID PRETYPES  CONST
+|       PRETYPES        CONST
+|       TYPES
+|       PRETYPES TYPES
+|       TYPES PRETYPES
+|       CONST TYPES
+|       CONST PRETYPES TYPES
+|       CONST TYPES PRETYPES
+|       TYPES           CONST
+|       PRETYPES TYPES  CONST
+|       TYPES PRETYPES  CONST
+
+TYPES:
+        INT
+|       CHAR
+|       FLOAT
+|       DOUBLE
+|       VOID
+|       SIZE_T
+
+PROGRAM: 
+        DIRECTIVES NONFUNC_OPS
 
 DIRECTIVES:
-|       DIRECTIVES '#' INCLUDE '<' ID '>' 
 |       DIRECTIVES '#' INCLUDE STRING
-|       DIRECTIVES '#' INCLUDE '<' ID DOT ID '>' 
-|       DIRECTIVES '#' DEFINE ID VAL
+|       DIRECTIVES '#' INCLUDE '<' GEN_ID '>' 
+|       DIRECTIVES '#' DEFINE ID DIRECTIVE_VAL
 |       DIRECTIVES '#' DEFINE ID '(' MACR ')' EXPR
 |       DIRECTIVES '#' DEFINE ID '(' MACR ')' FOR_MACR
 |       DIRECTIVES '#' DEFINE ID '(' MACR ')' WHILE_MACR
 |       DIRECTIVES '#' DEFINE ID '(' MACR ')' DO_WHILE_MACR
 
-OPS:    OP
-|       OPS OP
+DIRECTIVE_VAL:
+    INT_NUM
+|   FLOAT_NUM
+|   STRING
+|   UNARY VAL
+|   FUNCTION FUNCTOR
+
+DIRECTIVE_CYCLES:
+
+IF_DEF:
+        '#' IFDEF VAL NONFUNC_OPS '#' ENDIF
+|       '#' IFNDEF VAL NONFUNC_OPS '#' ENDIF
 
 
-STRUCT_UNION_DEF:
-        STRUCT_UNION_TYPES ID '{' VAR_DECLS '}' ';'
-|       STRUCT_UNION_TYPES ID '{' VAR_DECLS '}' ID ';'
+SYMBOLS_IS:
+        PLUS_IS
+|       MIN_IS
+|       MUL_IS
+|       DIV_IS
+|       AND_IS
+|       OR_IS
+|       MOD_IS
+|       XOR_IS
+|       TILDA_IS
+
+STRUCT_UNION_DEFI:
+        STRUCT_UNION_TYPES ID '{' VAR_DEFIS '}'
+|       STRUCT_UNION_TYPES ID '{' VAR_DEFIS '}' ID
+
 
 STRUCT_UNION_DECL:
         STRUCT_UNION_TYPES ID ID '=' '{' ARGS '}'
-|       STRUCT_UNION_TYPES ID ID ';'
-
+|       STRUCT_UNION_TYPES ID ID
 
 INT_NUM: DIGITS
 DIGITS:  DIGIT
 |        DIGITS DIGIT
 
-FLOAT_NUM: 
-         DIGITS FLOAT_EXP
-|        DIGITS DOT
-|        DIGITS DOT DIGITS
-|               DOT DIGITS
-|        DIGITS DOT        FLOAT_EXP      
-|        DIGITS DOT DIGITS FLOAT_EXP 
-|               DOT DIGITS FLOAT_EXP  
+
+POINTER: '*' | POINTER '*'
+
+NONFUNC_OP:
+        ';'
+|       VAR_DEFI                ';'
+|       STRUCT_UNION_DEFI       ';'
+|       VAR_DECL                ';'
+|       VAR_ASSIGN              ';'
+|       TYPEDEFS
+|       IF_DEF
+|       FUNCTION_DECL_DEFI
+|       error NONFUNC_OP        { yyerrok; }
+|       VAR_DEFI error ';'      { yyerrok; }
 
 
+NONFUNC_OPS: 
+        NONFUNC_OP
+|       NONFUNC_OPS NONFUNC_OP
 
-OP:     BODY
+
+FUNC_OP:
+        BODY
 |       ';'
 |       EXPR ';'
-|       IF '(' EXPR ')' '{' OPS '}'
-|       IF '(' EXPR ')' '{' OPS '}' ELSE '{' OPS '}'
+|       IF_EXPR
 |       FOR_OP
 |       WHILE_OP
 |       DO_WHILE_OP
-|       RETURN ';'
-|       RETURN FUNCTOR ';'
-|       VAR_DECL    ';'
-|       FUNCTION_DECL
+|       ARR_ASSIGN              ';'
+|       RETURN                  ';'
+|       RETURN FUNCTOR          ';'
+|       RETURN EXPR             ';'
+|       VAR_DEFI                ';'
+|       STRUCT_UNION_DEFI       ';'
+|       VAR_DECL                ';'
 |       FOR error ';'           { yyerrok; }
-|       EXPR error OP           { yyerrok; }
-|       error OP                { yyerrok; }
-|       VAR_DECL error ';'      { yyerrok; }
+|       EXPR error FUNC_OP      { yyerrok; }
+|       error FUNC_OP           { yyerrok; }
+|       VAR_DEFI error ';'      { yyerrok; }
 
+IF_EXPR:
+        IF '(' EXPR ')' '{' FUNC_OPS '}'
+|       IF '(' EXPR ')' '{' FUNC_OPS '}'         ELSE '{' FUNC_OPS '}'
+|       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE_IF
+|       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE_IF ELSE '{' FUNC_OPS '}'
 
-FOR_OP: FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' OP
+ELSE_IF:
+        ELSE IF '(' EXPR ')' '{' FUNC_OPS '}'
+|       ELSE_IF ELSE IF '(' EXPR ')' '{' FUNC_OPS '}'
 
-WHILE_OP: WHILE '(' EXPR ')' OP
+BODY:
+    '{'          '}'
+|   '{' FUNC_OPS '}'
 
-DO_WHILE_OP: DO OP WHILE '(' EXPR ')' ';'
+FUNC_OPS:    
+        FUNC_OP
+|       FUNC_OPS FUNC_OP
+
+TYPEDEFS:
+        TYPEDEF STRUCT_UNION_TYPES '{' VAR_DEFIS '}' ID ';'
+|       TYPEDEF TYPES_EXT ID ';'
+
+FOR_OP: FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' FUNC_OPS
+
+WHILE_OP: WHILE '(' EXPR ')' BODY
+
+DO_WHILE_OP: DO BODY WHILE '(' EXPR ')' ';'
 
 FOR_MACR: FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' '{' MACR '}'
 
@@ -108,30 +203,29 @@ DO_WHILE_MACR: DO '{' MACR '}' WHILE '(' EXPR ')'
 
 FOR_EXPR_1:
 |   VAR_DECL
+|   VAR_DEFI
 |   FOR_EXPR_1 ',' VAR_ASSIGN
-
+|   EXPR
 
 
 FOR_EXPR_2:
 |       EXPR_LOGIC_1
 
 FOR_EXPR_3:
-|       VAR_ASSIGN 
+|       VAR_ASSIGN
+|       ARR_ASSIGN
+|       GEN_ID INCR
+|       INCR GEN_ID
+|       GEN_ID DECR
+|       DECR GEN_ID
 
-BODY:
-    '{'     '}'
-|   '{' OPS '}'
+GEN_ID:
+        ID
+|       STRUCT_ID
 
 EXPR:
         EXPR_LOGIC_1
 |       VAR_ASSIGN
-
-TYPES:
-        INT
-|       CHAR
-|       FLOAT
-|       DOUBLE
-|       VOID
 
 ADDR_QUAL:
         GLOBAL
@@ -151,42 +245,91 @@ cmp_symbols:
 |       '>' 
 |       '<' 
 
+FUNCTION_DECL_DEFI: 
+        TYPES_EXT                   ID FUNCTION_DECL_FUNCTOR BODY
+|       TYPES_EXT                   ID FUNCTION_DECL_FUNCTOR ';'
+|       KERNEL VOID                 ID FUNCTION_DECL_FUNCTOR BODY
+|       KERNEL VOID                 ID FUNCTION_DECL_FUNCTOR ';'
+|       ADDR_QUAL TYPES_EXT POINTER ID FUNCTION_DECL_FUNCTOR BODY 
+|       ADDR_QUAL TYPES_EXT POINTER ID FUNCTION_DECL_FUNCTOR ';'
+|                 TYPES_EXT POINTER ID FUNCTION_DECL_FUNCTOR BODY 
+|                 TYPES_EXT POINTER ID FUNCTION_DECL_FUNCTOR ';'
 
-FUNCTION_DECL: 
-        TYPES ID FUNCTION_DECL_FUNCTOR BODY
-|       TYPES ID FUNCTION_DECL_FUNCTOR ';'
-|       KERNEL TYPES ID FUNCTION_DECL_FUNCTOR BODY
-|       KERNEL TYPES ID FUNCTION_DECL_FUNCTOR ';'
-|       ADDR_QUAL /*POINTER*/ TYPES ID FUNCTION_DECL_FUNCTOR BODY // Допустимо только для указателей
-|       ADDR_QUAL /*POINTER*/ TYPES ID FUNCTION_DECL_FUNCTOR ';' // Аналогично верхнему
 
-VAR_DECL: 
-        TYPES ID
-|       ADDR_QUAL /*POINTER*/ TYPES ID // Только для указателей (в том числе массивов)
-|       TYPES ID '=' EXPR
-|       ADDR_QUAL /*POINTER*/ TYPES ID '=' EXPR // Только для указателей (в том числе массивов)
-|       TYPES VAR_ASSIGNS
-|       STRUCT_UNION_DECL
-|       STRUCT_UNION_DEF
 
-VAR_DECLS:
-        VAR_DECL ';'
-|       VAR_DECLS VAR_DECL ';'
 
-VAR_DEFI: TYPES VAR_ASSIGN
-VAR_ASSIGN: ID '=' EXPR
+PTR_DECL:
+                  TYPES_EXT POINTER VAR_ASSIGN
+|       ADDR_QUAL TYPES_EXT POINTER VAR_ASSIGN
+
+
+
+VAR_ASSIGN: 
+        GEN_ID '=' EXPR
+|       GEN_ID SYMBOLS_IS EXPR
+
+ARR_ASSIGN:
+        GEN_ID ARR_BRACERS_ASSIGN '=' EXPR
+
 VAR_ASSIGNS:
         VAR_ASSIGN
 |       VAR_ASSIGNS ',' VAR_ASSIGN
 
+ID_VAL_PART:
+        ID
+|       ID_VAL_PART ',' ID
+
+VAR_DECL:
+        TYPES_EXT VAR_ASSIGNS
+|       PTR_DECL
+|       STRUCT_UNION_DECL
+
+VAR_DEFI: 
+                  TYPES_EXT         ID_VAL_PART 
+|                 TYPES_EXT POINTER ID_VAL_PART 
+|       ADDR_QUAL TYPES_EXT POINTER ID_VAL_PART 
+|                 TYPES_EXT         ID_VAL_PART ARR_BRACERS_DEFI
+|       ADDR_QUAL TYPES_EXT         ID_VAL_PART ARR_BRACERS_DEFI
+|                 TYPES_EXT POINTER ID_VAL_PART ARR_BRACERS_DEFI
+|       ADDR_QUAL TYPES_EXT POINTER ID_VAL_PART ARR_BRACERS_DEFI
+
+VAR_DEFIS:
+        VAR_DEFI ';'
+|       VAR_DEFIS VAR_DEFI ';'
+
+
+FUNC_VAR_DEFI: 
+                  TYPES_EXT         ID
+|                 TYPES_EXT POINTER ID
+|       ADDR_QUAL TYPES_EXT POINTER ID
+|                 TYPES_EXT         ID ARR_BRACERS_DEFI
+|       ADDR_QUAL TYPES_EXT         ID ARR_BRACERS_DEFI
+|                 TYPES_EXT POINTER ID ARR_BRACERS_DEFI
+|       ADDR_QUAL TYPES_EXT POINTER ID ARR_BRACERS_DEFI
+
+FUNC_VAR_DEFIS:
+        FUNC_VAR_DEFI
+|       FUNC_VAR_DEFIS ',' FUNC_VAR_DEFI
+
+ARR_BRACERS_DEFI:
+                         '['      ']'
+|                        '[' EXPR ']'
+|       ARR_BRACERS_DEFI '[' EXPR ']'
+|                        '['      ']' '=' '{' ARGS '}'
+|                        '[' EXPR ']' '=' '{' ARGS '}'
+|       ARR_BRACERS_DEFI '[' EXPR ']' '=' '{' ARGS '}'
+
+ARR_BRACERS_ASSIGN:
+                           '[' EXPR ']'
+|       ARR_BRACERS_ASSIGN '[' EXPR ']'
+
 
 FUNCTION:
-    PRINT
+        ID
+|       PRINT
 
 FUNCTION_DECL_FUNCTOR: '(' DECL_ARGS ')'
-DECL_ARGS: | DECL_ARG | DECL_ARGS ',' DECL_ARG
-
-DECL_ARG:  VAR_DECL // Исправить, т. к. недопустима конструкция типа void func(int x = 5) и т. д.
+DECL_ARGS: | FUNC_VAR_DEFIS | DECL_ARGS ',' FUNC_VAR_DEFIS
 
 FUNCTOR: '(' ARGS ')'
 
@@ -221,9 +364,13 @@ VAL:
 |   STRING
 |   UNARY VAL
 |   '(' EXPR ')' 
-|   ID 
+|   GEN_ID ARR_BRACERS_ASSIGN 
 |   FUNCTION FUNCTOR
-|   ID '.' ID
+|   GEN_ID
+|   GEN_ID INCR
+|   INCR GEN_ID
+|   GEN_ID DECR
+|   DECR GEN_ID
 
 
 UNARY:
