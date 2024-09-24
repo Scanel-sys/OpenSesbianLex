@@ -164,10 +164,8 @@ FUNCTION_DECL_DEFI:
 
 
 ID_VAL_PART:
-        VAR_ASSIGN
-|       ID
+        ID
 |       ID_VAL_PART ',' ID
-|       ID_VAL_PART ',' VAR_ASSIGN
 
 VAR_DECL:
         TYPES VAR_ASSIGNS
