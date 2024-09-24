@@ -4,6 +4,11 @@ void func(int a[], char b[2]);
 
 char* b[][2][3][4];
 
+
+
+char* b[][2][3][4] = {1, 2, 3};
+
+
 char* c = "test";
 
 void****** bbbb[2];

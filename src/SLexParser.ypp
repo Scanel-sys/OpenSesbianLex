@@ -36,7 +36,8 @@
 %token GLOBAL LOCAL CONSTANT PRIVATE KERNEL
 %%
 
-PROGRAM: DIRECTIVES OPS
+PROGRAM: 
+        DIRECTIVES NONFUNC_OPS
 
 DIRECTIVES:
 |       DIRECTIVES '#' INCLUDE '<' ID '>' 
@@ -48,8 +49,7 @@ DIRECTIVES:
 |       DIRECTIVES '#' DEFINE ID '(' MACR ')' WHILE_MACR
 |       DIRECTIVES '#' DEFINE ID '(' MACR ')' DO_WHILE_MACR
 
-OPS:    OP
-|       OPS OP
+
 
 
 STRUCT_UNION_DEFI:
@@ -76,11 +76,28 @@ FLOAT_NUM:
 
 POINTER: '*' | POINTER '*'
 
-OP:     
+NONFUNC_OP:
         ';'
+|       VAR_DEFI                ';'
+|       STRUCT_UNION_DEFI       ';'
+|       VAR_DECL                ';'
+|       VAR_ASSIGN              ';'
+|       FUNCTION_DECL_DEFI
+|       error NONFUNC_OP        { yyerrok; }
+|       VAR_DEFI error ';'      { yyerrok; }
+
+
+NONFUNC_OPS: 
+        NONFUNC_OP
+|       NONFUNC_OPS NONFUNC_OP
+
+
+FUNC_OP:
+        BODY
+|       ';'
 |       EXPR ';'
-|       IF '(' EXPR ')' '{' OPS '}'
-|       IF '(' EXPR ')' '{' OPS '}' ELSE '{' OPS '}'
+|       IF '(' EXPR ')' '{' FUNC_OPS '}'
+|       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE '{' FUNC_OPS '}'
 |       FOR_OP
 |       WHILE_OP
 |       DO_WHILE_OP
@@ -89,18 +106,25 @@ OP:
 |       VAR_DEFI                ';'
 |       STRUCT_UNION_DEFI       ';'
 |       VAR_DECL                ';'
-|       FUNCTION_DECL_DEFI
 |       FOR error ';'           { yyerrok; }
-|       EXPR error OP           { yyerrok; }
-|       error OP                { yyerrok; }
+|       EXPR error FUNC_OP      { yyerrok; }
+|       error FUNC_OP           { yyerrok; }
 |       VAR_DEFI error ';'      { yyerrok; }
 
+BODY:
+    '{'          '}'
+|   '{' FUNC_OPS '}'
 
-FOR_OP: FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' OP
+FUNC_OPS:    
+        FUNC_OP
+|       FUNC_OPS FUNC_OP
 
-WHILE_OP: WHILE '(' EXPR ')' OP
 
-DO_WHILE_OP: DO OP WHILE '(' EXPR ')' ';'
+FOR_OP: FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' FUNC_OPS
+
+WHILE_OP: WHILE '(' EXPR ')' BODY
+
+DO_WHILE_OP: DO BODY WHILE '(' EXPR ')' ';'
 
 FOR_MACR: FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' '{' MACR '}'
 
@@ -109,8 +133,10 @@ WHILE_MACR: WHILE '(' EXPR ')' '{' MACR '}'
 DO_WHILE_MACR: DO '{' MACR '}' WHILE '(' EXPR ')'
 
 FOR_EXPR_1:
+|   VAR_DECL
 |   VAR_DEFI
 |   FOR_EXPR_1 ',' VAR_ASSIGN
+|   EXPR
 
 
 FOR_EXPR_2:
@@ -118,10 +144,6 @@ FOR_EXPR_2:
 
 FOR_EXPR_3:
 |       VAR_ASSIGN 
-
-BODY:
-    '{'     '}'
-|   '{' OPS '}'
 
 EXPR:
         EXPR_LOGIC_1
@@ -224,7 +246,8 @@ ARR_BRACERS_DEFI:
 
 
 FUNCTION:
-    PRINT
+        ID
+|       PRINT
 
 FUNCTION_DECL_FUNCTOR: '(' DECL_ARGS ')'
 DECL_ARGS: | FUNC_VAR_DEFIS | DECL_ARGS ',' FUNC_VAR_DEFIS
