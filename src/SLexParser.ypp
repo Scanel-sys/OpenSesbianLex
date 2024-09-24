@@ -152,6 +152,7 @@ FUNC_OP:
 |       ';'
 |       EXPR ';'
 |       IF_EXPR
+|       IF_DEF
 |       FOR_OP
 |       WHILE_OP
 |       DO_WHILE_OP
