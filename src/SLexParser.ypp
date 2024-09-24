@@ -28,7 +28,7 @@
 %token IF ELSE WHILE DO FOR RETURN
 %token EQ LE GE NE
 %token AND OR 
-%token INCLUDE DEFINE TYPEDEF // Нужен struct и указатели с массивами
+%token INCLUDE DEFINE TYPEDEF
 %token UNION STRUCT
 %token STRING ID
 %token PRINT
@@ -179,18 +179,21 @@ PTR_DECL:
 |       ADDR_QUAL CONST TYPES POINTER VAR_ASSIGN
 
 
-VAR_ASSIGN: ID '=' EXPR
+VAR_ASSIGN: 
+        ID '=' EXPR
+|       ID ARR_BRACERS_FOR_ASSIGN '=' '{' ARGS '}'
+
 VAR_ASSIGNS:
         VAR_ASSIGN
 |       VAR_ASSIGNS ',' VAR_ASSIGN
 
 VAR_DEFI: 
-                        TYPES         ID_VAL_PART
-|       ADDR_QUAL       TYPES POINTER ID_VAL_PART
-|                       TYPES POINTER ID_VAL_PART
-|                 CONST TYPES         ID_VAL_PART
-|       ADDR_QUAL CONST TYPES POINTER ID_VAL_PART
-|                 CONST TYPES POINTER ID_VAL_PART
+                        TYPES         ID_VAL_PART ARR_BRACERS_DEFI
+|       ADDR_QUAL       TYPES POINTER ID_VAL_PART ARR_BRACERS_DEFI
+|                       TYPES POINTER ID_VAL_PART ARR_BRACERS_DEFI
+|                 CONST TYPES         ID_VAL_PART ARR_BRACERS_DEFI
+|       ADDR_QUAL CONST TYPES POINTER ID_VAL_PART ARR_BRACERS_DEFI
+|                 CONST TYPES POINTER ID_VAL_PART ARR_BRACERS_DEFI
 
 VAR_DEFIS:
         VAR_DEFI ';'
@@ -198,17 +201,25 @@ VAR_DEFIS:
 
 
 FUNC_VAR_DEFI: 
-                        TYPES         ID
-|       ADDR_QUAL       TYPES POINTER ID
-|                       TYPES POINTER ID
-|                 CONST TYPES         ID
-|       ADDR_QUAL CONST TYPES POINTER ID
-|                 CONST TYPES POINTER ID
+                        TYPES         ID ARR_BRACERS_DEFI
+|       ADDR_QUAL       TYPES POINTER ID ARR_BRACERS_DEFI
+|                       TYPES POINTER ID ARR_BRACERS_DEFI
+|                 CONST TYPES         ID ARR_BRACERS_DEFI
+|       ADDR_QUAL CONST TYPES POINTER ID ARR_BRACERS_DEFI
+|                 CONST TYPES POINTER ID ARR_BRACERS_DEFI
 
 FUNC_VAR_DEFIS:
         FUNC_VAR_DEFI
 |       FUNC_VAR_DEFIS ',' FUNC_VAR_DEFI
 
+ARR_BRACERS_DEFI:
+|                        '['      ']'
+|                        '[' EXPR ']'
+|       ARR_BRACERS_DEFI '[' EXPR ']'
+
+ARR_BRACERS_FOR_ASSIGN:
+|                              '[' EXPR ']'
+|       ARR_BRACERS_FOR_ASSIGN '[' EXPR ']'
 
 FUNCTION:
     PRINT
