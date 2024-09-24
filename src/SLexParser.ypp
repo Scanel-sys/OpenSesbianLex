@@ -88,7 +88,7 @@ OP:
 |       RETURN FUNCTOR          ';'
 |       VAR_DEFI                ';'
 |       STRUCT_UNION_DEFI       ';'
-|       VAR_DECL
+|       VAR_DECL                ';'
 |       FUNCTION_DECL_DEFI
 |       FOR error ';'           { yyerrok; }
 |       EXPR error OP           { yyerrok; }
@@ -153,19 +153,16 @@ cmp_symbols:
 |       '<' 
 
 FUNCTION_DECL_DEFI: 
-        TYPES ID FUNCTION_DECL_FUNCTOR BODY
-|       TYPES ID FUNCTION_DECL_FUNCTOR ';'
-|       KERNEL VOID ID FUNCTION_DECL_FUNCTOR BODY
-|       KERNEL VOID ID FUNCTION_DECL_FUNCTOR ';'
+        TYPES                   ID FUNCTION_DECL_FUNCTOR BODY
+|       TYPES                   ID FUNCTION_DECL_FUNCTOR ';'
+|       KERNEL VOID             ID FUNCTION_DECL_FUNCTOR BODY
+|       KERNEL VOID             ID FUNCTION_DECL_FUNCTOR ';'
 |       ADDR_QUAL TYPES POINTER ID FUNCTION_DECL_FUNCTOR BODY 
 |       ADDR_QUAL TYPES POINTER ID FUNCTION_DECL_FUNCTOR ';'
 |                 TYPES POINTER ID FUNCTION_DECL_FUNCTOR BODY 
 |                 TYPES POINTER ID FUNCTION_DECL_FUNCTOR ';'
 
 
-ID_VAL_PART:
-        ID
-|       ID_VAL_PART ',' ID
 
 VAR_DECL:
         TYPES VAR_ASSIGNS
@@ -181,11 +178,15 @@ PTR_DECL:
 
 VAR_ASSIGN: 
         ID '=' EXPR
-|       ID ARR_BRACERS_FOR_ASSIGN '=' '{' ARGS '}'
+
 
 VAR_ASSIGNS:
         VAR_ASSIGN
 |       VAR_ASSIGNS ',' VAR_ASSIGN
+
+ID_VAL_PART:
+        ID
+|       ID_VAL_PART ',' ID
 
 VAR_DEFI: 
                         TYPES         ID_VAL_PART ARR_BRACERS_DEFI
@@ -216,10 +217,11 @@ ARR_BRACERS_DEFI:
 |                        '['      ']'
 |                        '[' EXPR ']'
 |       ARR_BRACERS_DEFI '[' EXPR ']'
+|                        '['      ']' '=' '{' ARGS '}'
+|                        '[' EXPR ']' '=' '{' ARGS '}'
+|       ARR_BRACERS_DEFI '[' EXPR ']' '=' '{' ARGS '}'
 
-ARR_BRACERS_FOR_ASSIGN:
-|                              '[' EXPR ']'
-|       ARR_BRACERS_FOR_ASSIGN '[' EXPR ']'
+
 
 FUNCTION:
     PRINT
