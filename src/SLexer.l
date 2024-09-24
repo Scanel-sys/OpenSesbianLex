@@ -183,11 +183,6 @@ __kernel        { BeginToken(yytext); return KERNEL; }
         return DECR;
       }
 
-"."             {
-                  BeginToken(yytext);
-                  return DOT;
-}
-
 [-{};()=<>+*/!,] { 
                     BeginToken(yytext);
                     return *yytext; 
