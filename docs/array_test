@@ -1,0 +1,11 @@
+int a[4];
+
+void func(int a[], char b[2]);
+
+char* b[][2][3][4];
+
+char* c = "test";
+
+void****** bbbb[2];
+
+float d[3] = {2.3, 4.1, 3.0000001};
