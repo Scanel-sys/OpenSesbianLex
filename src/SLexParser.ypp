@@ -24,33 +24,91 @@
 %defines
 
 %start PROGRAM 
-%token DIGIT DOT FLOAT_EXP
+%token DIGIT DOT
 %token IF ELSE WHILE DO FOR RETURN
 %token EQ LE GE NE
 %token AND OR 
 %token INCLUDE DEFINE TYPEDEF
 %token UNION STRUCT
-%token STRING ID
+%token STRING ID STRUCT_ID
 %token PRINT
-%token CONST INT CHAR FLOAT DOUBLE VOID
+%token CONST VOID
+%token INT CHAR FLOAT DOUBLE SIZE_T
 %token GLOBAL LOCAL CONSTANT PRIVATE KERNEL
+%token INCR DECR PLUS_IS MIN_IS MUL_IS DIV_IS AND_IS OR_IS MOD_IS XOR_IS TILDA_IS
+%token UNSIGNED LONG SHORT 
+%token FLOAT_NUM
 %%
+
+PRETYPES:
+        UNSIGNED
+|       LONG
+|       SHORT
+
+TYPES_EXT:
+        ID
+|       PRETYPES ID
+|       ID PRETYPES
+|       PRETYPES
+|       CONST ID
+|       CONST PRETYPES ID
+|       CONST ID PRETYPES
+|       CONST PRETYPES
+|       ID           CONST
+|       PRETYPES ID  CONST
+|       ID PRETYPES  CONST
+|       PRETYPES        CONST
+|       TYPES
+|       PRETYPES TYPES
+|       TYPES PRETYPES
+|       CONST TYPES
+|       CONST PRETYPES TYPES
+|       CONST TYPES PRETYPES
+|       TYPES           CONST
+|       PRETYPES TYPES  CONST
+|       TYPES PRETYPES  CONST
+
+TYPES:
+        INT
+|       CHAR
+|       FLOAT
+|       DOUBLE
+|       VOID
+|       SIZE_T
 
 PROGRAM: 
         DIRECTIVES NONFUNC_OPS
 
 DIRECTIVES:
-|       DIRECTIVES '#' INCLUDE '<' ID '>' 
 |       DIRECTIVES '#' INCLUDE STRING
-|       DIRECTIVES '#' INCLUDE '<' ID DOT ID '>' 
-|       DIRECTIVES '#' DEFINE ID VAL
+|       DIRECTIVES '#' INCLUDE '<' GEN_ID '>' 
+|       DIRECTIVES '#' DEFINE ID DIRECTIVE_VAL
 |       DIRECTIVES '#' DEFINE ID '(' MACR ')' EXPR
 |       DIRECTIVES '#' DEFINE ID '(' MACR ')' FOR_MACR
 |       DIRECTIVES '#' DEFINE ID '(' MACR ')' WHILE_MACR
 |       DIRECTIVES '#' DEFINE ID '(' MACR ')' DO_WHILE_MACR
 
+DIRECTIVE_VAL:
+    INT_NUM
+|   FLOAT_NUM
+|   STRING
+|   UNARY VAL
+|   FUNCTION FUNCTOR
+
+DIRECTIVE_CYCLES:
 
 
+
+SYMBOLS_IS:
+        PLUS_IS
+|       MIN_IS
+|       MUL_IS
+|       DIV_IS
+|       AND_IS
+|       OR_IS
+|       MOD_IS
+|       XOR_IS
+|       TILDA_IS
 
 STRUCT_UNION_DEFI:
         STRUCT_UNION_TYPES ID '{' VAR_DEFIS '}'
@@ -65,14 +123,6 @@ INT_NUM: DIGITS
 DIGITS:  DIGIT
 |        DIGITS DIGIT
 
-FLOAT_NUM: 
-         DIGITS FLOAT_EXP
-|        DIGITS DOT
-|        DIGITS DOT DIGITS
-|               DOT DIGITS
-|        DIGITS DOT        FLOAT_EXP      
-|        DIGITS DOT DIGITS FLOAT_EXP 
-|               DOT DIGITS FLOAT_EXP  
 
 POINTER: '*' | POINTER '*'
 
@@ -97,13 +147,14 @@ FUNC_OP:
         BODY
 |       ';'
 |       EXPR ';'
-|       IF '(' EXPR ')' '{' FUNC_OPS '}'
-|       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE '{' FUNC_OPS '}'
+|       IF_EXPR
 |       FOR_OP
 |       WHILE_OP
 |       DO_WHILE_OP
+|       ARR_ASSIGN              ';'
 |       RETURN                  ';'
 |       RETURN FUNCTOR          ';'
+|       RETURN EXPR             ';'
 |       VAR_DEFI                ';'
 |       STRUCT_UNION_DEFI       ';'
 |       VAR_DECL                ';'
@@ -111,6 +162,16 @@ FUNC_OP:
 |       EXPR error FUNC_OP      { yyerrok; }
 |       error FUNC_OP           { yyerrok; }
 |       VAR_DEFI error ';'      { yyerrok; }
+
+IF_EXPR:
+        IF '(' EXPR ')' '{' FUNC_OPS '}'
+|       IF '(' EXPR ')' '{' FUNC_OPS '}'         ELSE '{' FUNC_OPS '}'
+|       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE_IF
+|       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE_IF ELSE '{' FUNC_OPS '}'
+
+ELSE_IF:
+        ELSE IF '(' EXPR ')' '{' FUNC_OPS '}'
+|       ELSE_IF ELSE IF '(' EXPR ')' '{' FUNC_OPS '}'
 
 BODY:
     '{'          '}'
@@ -122,7 +183,7 @@ FUNC_OPS:
 
 TYPEDEFS:
         TYPEDEF STRUCT_UNION_TYPES '{' VAR_DEFIS '}' ID ';'
-|       TYPEDEF TYPES ID ';'
+|       TYPEDEF TYPES_EXT ID ';'
 
 FOR_OP: FOR '(' FOR_EXPR_1 ';' FOR_EXPR_2 ';' FOR_EXPR_3 ')' FUNC_OPS
 
@@ -147,18 +208,20 @@ FOR_EXPR_2:
 |       EXPR_LOGIC_1
 
 FOR_EXPR_3:
-|       VAR_ASSIGN 
+|       VAR_ASSIGN
+|       ARR_ASSIGN
+|       GEN_ID INCR
+|       INCR GEN_ID
+|       GEN_ID DECR
+|       DECR GEN_ID
+
+GEN_ID:
+        ID
+|       STRUCT_ID
 
 EXPR:
         EXPR_LOGIC_1
 |       VAR_ASSIGN
-
-TYPES:
-        INT
-|       CHAR
-|       FLOAT
-|       DOUBLE
-|       VOID
 
 ADDR_QUAL:
         GLOBAL
@@ -179,32 +242,30 @@ cmp_symbols:
 |       '<' 
 
 FUNCTION_DECL_DEFI: 
-        TYPES                   ID FUNCTION_DECL_FUNCTOR BODY
-|       TYPES                   ID FUNCTION_DECL_FUNCTOR ';'
-|       KERNEL VOID             ID FUNCTION_DECL_FUNCTOR BODY
-|       KERNEL VOID             ID FUNCTION_DECL_FUNCTOR ';'
-|       ADDR_QUAL TYPES POINTER ID FUNCTION_DECL_FUNCTOR BODY 
-|       ADDR_QUAL TYPES POINTER ID FUNCTION_DECL_FUNCTOR ';'
-|                 TYPES POINTER ID FUNCTION_DECL_FUNCTOR BODY 
-|                 TYPES POINTER ID FUNCTION_DECL_FUNCTOR ';'
+        TYPES_EXT                   ID FUNCTION_DECL_FUNCTOR BODY
+|       TYPES_EXT                   ID FUNCTION_DECL_FUNCTOR ';'
+|       KERNEL VOID                 ID FUNCTION_DECL_FUNCTOR BODY
+|       KERNEL VOID                 ID FUNCTION_DECL_FUNCTOR ';'
+|       ADDR_QUAL TYPES_EXT POINTER ID FUNCTION_DECL_FUNCTOR BODY 
+|       ADDR_QUAL TYPES_EXT POINTER ID FUNCTION_DECL_FUNCTOR ';'
+|                 TYPES_EXT POINTER ID FUNCTION_DECL_FUNCTOR BODY 
+|                 TYPES_EXT POINTER ID FUNCTION_DECL_FUNCTOR ';'
 
 
 
-VAR_DECL:
-        TYPES VAR_ASSIGNS
-|       PTR_DECL
-|       STRUCT_UNION_DECL
 
 PTR_DECL:
-                        TYPES POINTER VAR_ASSIGN
-|       ADDR_QUAL       TYPES POINTER VAR_ASSIGN
-|                 CONST TYPES POINTER VAR_ASSIGN
-|       ADDR_QUAL CONST TYPES POINTER VAR_ASSIGN
+                  TYPES_EXT POINTER VAR_ASSIGN
+|       ADDR_QUAL TYPES_EXT POINTER VAR_ASSIGN
+
 
 
 VAR_ASSIGN: 
-        ID '=' EXPR
+        GEN_ID '=' EXPR
+|       GEN_ID SYMBOLS_IS EXPR
 
+ARR_ASSIGN:
+        GEN_ID ARR_BRACERS_ASSIGN '=' EXPR
 
 VAR_ASSIGNS:
         VAR_ASSIGN
@@ -214,13 +275,19 @@ ID_VAL_PART:
         ID
 |       ID_VAL_PART ',' ID
 
+VAR_DECL:
+        TYPES_EXT VAR_ASSIGNS
+|       PTR_DECL
+|       STRUCT_UNION_DECL
+
 VAR_DEFI: 
-                        TYPES         ID_VAL_PART ARR_BRACERS_DEFI
-|       ADDR_QUAL       TYPES POINTER ID_VAL_PART ARR_BRACERS_DEFI
-|                       TYPES POINTER ID_VAL_PART ARR_BRACERS_DEFI
-|                 CONST TYPES         ID_VAL_PART ARR_BRACERS_DEFI
-|       ADDR_QUAL CONST TYPES POINTER ID_VAL_PART ARR_BRACERS_DEFI
-|                 CONST TYPES POINTER ID_VAL_PART ARR_BRACERS_DEFI
+                  TYPES_EXT         ID_VAL_PART 
+|                 TYPES_EXT POINTER ID_VAL_PART 
+|       ADDR_QUAL TYPES_EXT POINTER ID_VAL_PART 
+|                 TYPES_EXT         ID_VAL_PART ARR_BRACERS_DEFI
+|       ADDR_QUAL TYPES_EXT         ID_VAL_PART ARR_BRACERS_DEFI
+|                 TYPES_EXT POINTER ID_VAL_PART ARR_BRACERS_DEFI
+|       ADDR_QUAL TYPES_EXT POINTER ID_VAL_PART ARR_BRACERS_DEFI
 
 VAR_DEFIS:
         VAR_DEFI ';'
@@ -228,25 +295,29 @@ VAR_DEFIS:
 
 
 FUNC_VAR_DEFI: 
-                        TYPES         ID ARR_BRACERS_DEFI
-|       ADDR_QUAL       TYPES POINTER ID ARR_BRACERS_DEFI
-|                       TYPES POINTER ID ARR_BRACERS_DEFI
-|                 CONST TYPES         ID ARR_BRACERS_DEFI
-|       ADDR_QUAL CONST TYPES POINTER ID ARR_BRACERS_DEFI
-|                 CONST TYPES POINTER ID ARR_BRACERS_DEFI
+                  TYPES_EXT         ID
+|                 TYPES_EXT POINTER ID
+|       ADDR_QUAL TYPES_EXT POINTER ID
+|                 TYPES_EXT         ID ARR_BRACERS_DEFI
+|       ADDR_QUAL TYPES_EXT         ID ARR_BRACERS_DEFI
+|                 TYPES_EXT POINTER ID ARR_BRACERS_DEFI
+|       ADDR_QUAL TYPES_EXT POINTER ID ARR_BRACERS_DEFI
 
 FUNC_VAR_DEFIS:
         FUNC_VAR_DEFI
 |       FUNC_VAR_DEFIS ',' FUNC_VAR_DEFI
 
 ARR_BRACERS_DEFI:
-|                        '['      ']'
+                         '['      ']'
 |                        '[' EXPR ']'
 |       ARR_BRACERS_DEFI '[' EXPR ']'
 |                        '['      ']' '=' '{' ARGS '}'
 |                        '[' EXPR ']' '=' '{' ARGS '}'
 |       ARR_BRACERS_DEFI '[' EXPR ']' '=' '{' ARGS '}'
 
+ARR_BRACERS_ASSIGN:
+                           '[' EXPR ']'
+|       ARR_BRACERS_ASSIGN '[' EXPR ']'
 
 
 FUNCTION:
@@ -289,9 +360,13 @@ VAL:
 |   STRING
 |   UNARY VAL
 |   '(' EXPR ')' 
-|   ID 
+|   GEN_ID ARR_BRACERS_ASSIGN 
 |   FUNCTION FUNCTOR
-|   ID '.' ID
+|   GEN_ID
+|   GEN_ID INCR
+|   INCR GEN_ID
+|   GEN_ID DECR
+|   DECR GEN_ID
 
 
 UNARY:
