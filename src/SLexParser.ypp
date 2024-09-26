@@ -24,7 +24,7 @@
 %defines
 
 %start PROGRAM 
-%token DIGIT DOT
+%token DIGIT
 %token IF ELSE WHILE DO FOR RETURN
 %token EQ LE GE NE
 %token AND OR 
@@ -95,8 +95,6 @@ DIRECTIVE_VAL:
 |   UNARY VAL
 |   FUNCTION FUNCTOR
 
-DIRECTIVE_CYCLES:
-
 IF_DEF:
         '#' IFDEF VAL NONFUNC_OPS '#' ENDIF
 |       '#' IFNDEF VAL NONFUNC_OPS '#' ENDIF
@@ -152,6 +150,7 @@ FUNC_OP:
 |       ';'
 |       EXPR ';'
 |       IF_EXPR
+|       IF_DEF
 |       FOR_OP
 |       WHILE_OP
 |       DO_WHILE_OP

@@ -5,7 +5,10 @@ char func();
 
 #endif
 
-#ifndef _DEF_
+int func()
+{
+    #ifndef _DEF_
 
-int c = func("babube");
-#endif
+    int c = func("babube");
+    #endif
+}
