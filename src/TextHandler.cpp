@@ -11,7 +11,8 @@ int debug = 0;
 /*
     local vars
 */
-static FILE *file;
+static FILE *input_file;
+static FILE *obfuscated_file;
 static int eof = 0;
 static int nRow = 0;
 static int nBuffer = 0;
@@ -108,13 +109,17 @@ void PrintError(const char *errorstring, ...) {
  * 
  * dumps the contents of the current row
  *------------------------------------------------------------------*/
-void DumpRow(void) {
-        if(!err)
-    {
+void DumpRow(void) 
+{
+    if (err)
         fprintf(stderr, "\nError(s) occured while parsing:\n\n");
-    }
     
     fprintf(stdout, "%6d |%.*s", nRow, lBuffer, buffer);
+}
+
+void WriteFileRow(void)
+{
+    fprintf(obfuscated_file, "%s", buffer);
 }
 
 void BeginToken(char *t) 
@@ -191,9 +196,9 @@ int getNextLine(void) {
 
     /*================================================================*/
     /* read a line ---------------------------------------------------*/
-    p = fgets(buffer, lMaxBuffer, file);
+    p = fgets(buffer, lMaxBuffer, input_file);
     if (  p == NULL  ) {
-        if (  ferror(file)  )
+        if (  ferror(input_file)  )
             return -1;
         eof = true;
         return 1;
@@ -201,22 +206,25 @@ int getNextLine(void) {
 
     nRow += 1;
     lBuffer = strlen(buffer);
-    //DumpRow();                    // print all file lines
+    WriteFileRow();                   // print all file lines
 
     /*================================================================*/
-    /* that's it -----------------------------------------------------*/
     return 0;
 }
 
 
 int main(int argc, char *argv[])
 {
-    char *infile = argv[1];
-    file = fopen(infile, "r");
+    char *infile_path = argv[1];
+    input_file = fopen(infile_path, "r");
+    obfuscated_file = fopen("obfuscated_result.cl", "w");
+
     buffer = (char*)malloc(lMaxBuffer);
+    
     if (  buffer == NULL  ) {
         printf("cannot allocate %d bytes of memory\n", lMaxBuffer);
-        fclose(file);
+        fclose(input_file);
+        fclose(obfuscated_file);
         return 1;
     }
     
@@ -224,12 +232,11 @@ int main(int argc, char *argv[])
         yyparse();
     
     free(buffer);
-    fclose(file);
+    fclose(input_file);
+    fclose(obfuscated_file);
 
     if(!err)
-    {
         printf("PASS\n");
-    }
 
     return err;
 }

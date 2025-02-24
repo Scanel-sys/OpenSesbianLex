@@ -21,6 +21,7 @@ extern int yyparse(void);
 extern void yyerror(char*);
 
 void DumpRow(void);
+void WriteFileRow(void);
 int GetNextChar(char *b, int maxBuffer);
-void BeginToken(char*);
 void PrintError(const char *s, ...);
+void BeginToken(char*);
