@@ -3,6 +3,7 @@
 #define true 1
 #define false 0
 #define PREAMBULA_SIZE 7
+#define lMaxBuffer      1000
 /*
  * global variable
  */
@@ -20,7 +21,6 @@ static int lBuffer = 0;
 static int nTokenStart = 0;
 static int nTokenLength = 0;
 static int nTokenNextStart = 0;
-static int lMaxBuffer = 1000;
 
 static char *buffer;
 static char *temp_buffer;
@@ -32,6 +32,7 @@ int directives_ended = false;
 int if_processing = false;
 unsigned int if_body_start_pos = 0;
 unsigned int if_expr_start_pos = 0;
+unsigned int if_expr_end_pos = 0;
 
 
 static int getNextLine(void);
@@ -135,15 +136,30 @@ void ProcessObfuscation(char* token)
         if(if_expr_start_pos == 0 && token[0] == '(')
             if_expr_start_pos = strlen(temp_buffer);
         
+        if(if_expr_end_pos == 0 && token[0] == ')')
+            if_expr_end_pos = strlen(temp_buffer) - 1;
+        
         if(if_body_start_pos == 0 && token[0] == '{')
-            if_body_start_pos = strlen(temp_buffer);
+            if_body_start_pos = strlen(temp_buffer) - 1;
     }
 
     if(strlen(temp_buffer) != 0 && if_processing == false)
     {
+        char expression_buffer[lMaxBuffer];
+        char body_buffer[lMaxBuffer];
+        strncpy_s(expression_buffer, &temp_buffer[if_expr_start_pos], if_expr_end_pos - if_expr_start_pos);
+        strncpy_s(body_buffer, &temp_buffer[if_body_start_pos], strlen(temp_buffer) - if_body_start_pos);
+
         strncat(obf_buffer, temp_buffer, if_body_start_pos);
-        strncat(obf_buffer, temp_buffer, strlen(temp_buffer));
-        strncat(obf_buffer, &temp_buffer[if_body_start_pos], strlen(temp_buffer) - if_body_start_pos);
+        strncat(obf_buffer, "{", 1);
+
+        strncat(obf_buffer, temp_buffer, if_expr_start_pos);
+        strncat(obf_buffer, "!(", strlen("!("));
+        strncat(obf_buffer, expression_buffer, strlen(expression_buffer));
+        strncat(obf_buffer, "))", 2);
+
+        strncat(obf_buffer, body_buffer, strlen(body_buffer));
+        strncat(obf_buffer, &body_buffer[1], strlen(body_buffer));
 
         fprintf(obfuscated_file, "%s", obf_buffer);
         
