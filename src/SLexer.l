@@ -120,10 +120,10 @@ __kernel        { BeginToken(yytext); return KERNEL; }
                 }
 
 [ \t\r\n]       {
-                  // if(directives_ended == false)
-                  // {
+                  if(directives_ended == false)
+                  {
                         BeginToken(yytext);
-                  // }
+                  }
                 }
 
 ([0-9]+[eE][+-]{0,1}[0-9]+)|([0-9]*"."[0-9]*([eE][+-]{0,1}[0-9]+)?)"f"? {
