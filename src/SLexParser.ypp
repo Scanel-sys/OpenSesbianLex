@@ -7,7 +7,9 @@
     extern int yylineno;
     extern char * yytext;
     extern int yylex();
+    extern void AppendObfBuffer();
     extern YYLTYPE yylloc;
+    extern int directives_ended;
 
     extern void yyerror(const char *s) 
     {
@@ -45,28 +47,28 @@ PRETYPES:
 |       LONG
 |       SHORT
 
-TYPES_EXT:
-        ID
-|       PRETYPES ID
-|       ID PRETYPES
-|       PRETYPES
-|       CONST ID
-|       CONST PRETYPES ID
-|       CONST ID PRETYPES
-|       CONST PRETYPES
-|       ID           CONST
-|       PRETYPES ID  CONST
-|       ID PRETYPES  CONST
-|       PRETYPES        CONST
-|       TYPES
-|       PRETYPES TYPES
-|       TYPES PRETYPES
-|       CONST TYPES
-|       CONST PRETYPES TYPES
-|       CONST TYPES PRETYPES
-|       TYPES           CONST
-|       PRETYPES TYPES  CONST
-|       TYPES PRETYPES  CONST
+TYPES_EXT:                      
+        ID                              { directives_ended = true; }
+|       PRETYPES ID                     { directives_ended = true; }
+|       ID PRETYPES                     { directives_ended = true; }
+|       PRETYPES                        { directives_ended = true; }
+|       CONST ID                        { directives_ended = true; }
+|       CONST PRETYPES ID               { directives_ended = true; }
+|       CONST ID PRETYPES               { directives_ended = true; }
+|       CONST PRETYPES                  { directives_ended = true; }
+|       ID           CONST              { directives_ended = true; }
+|       PRETYPES ID  CONST              { directives_ended = true; }
+|       ID PRETYPES  CONST              { directives_ended = true; }
+|       PRETYPES        CONST           { directives_ended = true; }
+|       TYPES                           { directives_ended = true; }
+|       PRETYPES TYPES                  { directives_ended = true; }
+|       TYPES PRETYPES                  { directives_ended = true; }
+|       CONST TYPES                     { directives_ended = true; }
+|       CONST PRETYPES TYPES            { directives_ended = true; }
+|       CONST TYPES PRETYPES            { directives_ended = true; }
+|       TYPES           CONST           { directives_ended = true; }
+|       PRETYPES TYPES  CONST           { directives_ended = true; }
+|       TYPES PRETYPES  CONST           { directives_ended = true; }
 
 TYPES:
         INT
@@ -77,16 +79,16 @@ TYPES:
 |       SIZE_T
 
 PROGRAM: 
-        DIRECTIVES NONFUNC_OPS
+        DIRECTIVES NONFUNC_OPS 
 
 DIRECTIVES:
-|       DIRECTIVES '#' INCLUDE STRING
-|       DIRECTIVES '#' INCLUDE '<' GEN_ID '>' 
-|       DIRECTIVES '#' DEFINE ID DIRECTIVE_VAL
-|       DIRECTIVES '#' DEFINE ID '(' MACR ')' EXPR
-|       DIRECTIVES '#' DEFINE ID '(' MACR ')' FOR_MACR
-|       DIRECTIVES '#' DEFINE ID '(' MACR ')' WHILE_MACR
-|       DIRECTIVES '#' DEFINE ID '(' MACR ')' DO_WHILE_MACR
+|       DIRECTIVES '#' INCLUDE STRING                            
+|       DIRECTIVES '#' INCLUDE '<' GEN_ID '>'                    
+|       DIRECTIVES '#' DEFINE ID DIRECTIVE_VAL                   
+|       DIRECTIVES '#' DEFINE ID '(' MACR ')' EXPR               
+|       DIRECTIVES '#' DEFINE ID '(' MACR ')' FOR_MACR           
+|       DIRECTIVES '#' DEFINE ID '(' MACR ')' WHILE_MACR         
+|       DIRECTIVES '#' DEFINE ID '(' MACR ')' DO_WHILE_MACR      
 
 DIRECTIVE_VAL:
     INT_NUM
@@ -141,8 +143,8 @@ NONFUNC_OP:
 
 
 NONFUNC_OPS: 
-        NONFUNC_OP
-|       NONFUNC_OPS NONFUNC_OP
+        NONFUNC_OP             
+|       NONFUNC_OPS NONFUNC_OP  
 
 
 FUNC_OP:
@@ -167,8 +169,8 @@ FUNC_OP:
 |       VAR_DEFI error ';'      { yyerrok; }
 
 IF_EXPR:
-        IF '(' EXPR ')' '{' FUNC_OPS '}'
-|       IF '(' EXPR ')' '{' FUNC_OPS '}'         ELSE '{' FUNC_OPS '}'
+        IF '(' EXPR ')' '{' FUNC_OPS '}'                                        
+|       IF '(' EXPR ')' '{' FUNC_OPS '}'         ELSE '{' FUNC_OPS '}'      
 |       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE_IF
 |       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE_IF ELSE '{' FUNC_OPS '}'
 
@@ -245,7 +247,7 @@ cmp_symbols:
 |       '<' 
 
 FUNCTION_DECL_DEFI: 
-        TYPES_EXT                   ID FUNCTION_DECL_FUNCTOR BODY
+        TYPES_EXT                   ID FUNCTION_DECL_FUNCTOR BODY       
 |       TYPES_EXT                   ID FUNCTION_DECL_FUNCTOR ';'
 |       KERNEL VOID                 ID FUNCTION_DECL_FUNCTOR BODY
 |       KERNEL VOID                 ID FUNCTION_DECL_FUNCTOR ';'

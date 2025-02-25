@@ -21,7 +21,8 @@ extern int yyparse(void);
 extern void yyerror(char*);
 
 void DumpRow(void);
-void WriteFileRow(void);
+void ProcessObfuscation(char* token);
+void AppendObfBuffer(char* code_string);
 int GetNextChar(char *b, int maxBuffer);
 void PrintError(const char *s, ...);
 void BeginToken(char*);

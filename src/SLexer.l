@@ -8,6 +8,8 @@
     if (  result <= 0  ) \
       result = YY_NULL; \
     }
+
+    extern int directives_ended;
 %}
 
 
@@ -49,17 +51,17 @@ print           { BeginToken(yytext); return PRINT; }
 int             { BeginToken(yytext); return INT; }
 char            { BeginToken(yytext); return CHAR; }
 float           { BeginToken(yytext); return FLOAT; }
-float2           { BeginToken(yytext); return FLOAT; }
-float3           { BeginToken(yytext); return FLOAT; }
-float4           { BeginToken(yytext); return FLOAT; }
-float8           { BeginToken(yytext); return FLOAT; }
-float16           { BeginToken(yytext); return FLOAT; }
-float32           { BeginToken(yytext); return FLOAT; }
+float2          { BeginToken(yytext); return FLOAT; }
+float3          { BeginToken(yytext); return FLOAT; }
+float4          { BeginToken(yytext); return FLOAT; }
+float8          { BeginToken(yytext); return FLOAT; }
+float16         { BeginToken(yytext); return FLOAT; }
+float32         { BeginToken(yytext); return FLOAT; }
 double          { BeginToken(yytext); return DOUBLE; }
 const           { BeginToken(yytext); return CONST; }
-unsigned  { BeginToken(yytext); return UNSIGNED; }
-long      { BeginToken(yytext); return LONG; }
-short     { BeginToken(yytext); return SHORT; }
+unsigned        { BeginToken(yytext); return UNSIGNED; }
+long            { BeginToken(yytext); return LONG; }
+short           { BeginToken(yytext); return SHORT; }
 void            { BeginToken(yytext); return VOID; }
 typedef         { BeginToken(yytext); return TYPEDEF; }
 union           { BeginToken(yytext); return UNION; }
@@ -116,7 +118,12 @@ __kernel        { BeginToken(yytext); return KERNEL; }
                   BeginToken(yytext);
                 }
 
-[ \t\r\n]       BeginToken(yytext); // whitespace
+[ \t\r\n]       {
+                  if(directives_ended == false)
+                  {
+                        BeginToken(yytext);
+                  }
+                }
 
 ([0-9]+[eE][+-]{0,1}[0-9]+)|([0-9]*"."[0-9]*([eE][+-]{0,1}[0-9]+)?)"f"? {
                   BeginToken(yytext); 

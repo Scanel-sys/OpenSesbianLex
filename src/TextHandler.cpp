@@ -22,8 +22,10 @@ static int nTokenLength = 0;
 static int nTokenNextStart = 0;
 static int lMaxBuffer = 1000;
 static char *buffer;
+static char *obf_buffer;
 extern int yylineno;
 int err = false;
+int directives_ended = false;
 
 static int getNextLine(void);
 
@@ -117,18 +119,24 @@ void DumpRow(void)
     fprintf(stdout, "%6d |%.*s", nRow, lBuffer, buffer);
 }
 
-void WriteFileRow(void)
+void ProcessObfuscation(char* token)
 {
-    fprintf(obfuscated_file, "%s", buffer);
+    snprintf(obf_buffer, lMaxBuffer, "%s", token);
+
+    fprintf(obfuscated_file, "%s", obf_buffer);
 }
 
 void BeginToken(char *t) 
 {
+    ProcessObfuscation(t);
+    printf_s("%s\n", t);
+
     /*================================================================*/
     /* remember last read token --------------------------------------*/
     nTokenStart = nTokenNextStart;
     nTokenLength = strlen(t);
     nTokenNextStart = nBuffer; // + 1;
+
 
     /*================================================================*/
     /* location for bison --------------------------------------------*/
@@ -142,6 +150,11 @@ void BeginToken(char *t)
                             yylloc.first_column,
                             yylloc.last_column, nTokenNextStart);
     }
+}
+
+void AppendObfBuffer(char* code_string)
+{
+    strcat(obf_buffer, code_string);
 }
 
 /*--------------------------------------------------------------------
@@ -164,7 +177,7 @@ int GetNextChar(char *b, int maxBuffer)
         frc = getNextLine();
         if (  frc != 0  )
         return 0;
-        }
+    }
 
     /*================================================================*/
     /* ok, return character ------------------------------------------*/
@@ -206,7 +219,7 @@ int getNextLine(void) {
 
     nRow += 1;
     lBuffer = strlen(buffer);
-    WriteFileRow();                   // print all file lines
+    // ProcessObfuscation();                   // print all file lines
 
     /*================================================================*/
     return 0;
@@ -220,7 +233,9 @@ int main(int argc, char *argv[])
     obfuscated_file = fopen("obfuscated_result.cl", "w");
 
     buffer = (char*)malloc(lMaxBuffer);
-    
+    obf_buffer = (char*)malloc(lMaxBuffer);
+    obf_buffer[0] = '\0';
+
     if (  buffer == NULL  ) {
         printf("cannot allocate %d bytes of memory\n", lMaxBuffer);
         fclose(input_file);
@@ -232,6 +247,7 @@ int main(int argc, char *argv[])
         yyparse();
     
     free(buffer);
+    free(obf_buffer);
     fclose(input_file);
     fclose(obfuscated_file);
 
