@@ -21,11 +21,18 @@ static int nTokenStart = 0;
 static int nTokenLength = 0;
 static int nTokenNextStart = 0;
 static int lMaxBuffer = 1000;
+
 static char *buffer;
+static char *temp_buffer;
 static char *obf_buffer;
+
 extern int yylineno;
 int err = false;
 int directives_ended = false;
+int if_processing = false;
+unsigned int if_body_start_pos = 0;
+unsigned int if_expr_start_pos = 0;
+
 
 static int getNextLine(void);
 
@@ -121,15 +128,38 @@ void DumpRow(void)
 
 void ProcessObfuscation(char* token)
 {
-    snprintf(obf_buffer, lMaxBuffer, "%s", token);
+    if(if_processing == true)
+    {
+        strncat(temp_buffer, token, strlen(token));
 
-    fprintf(obfuscated_file, "%s", obf_buffer);
+        if(if_expr_start_pos == 0 && token[0] == '(')
+            if_expr_start_pos = strlen(temp_buffer);
+        
+        if(if_body_start_pos == 0 && token[0] == '{')
+            if_body_start_pos = strlen(temp_buffer);
+    }
+
+    if(strlen(temp_buffer) != 0 && if_processing == false)
+    {
+        strncat(obf_buffer, temp_buffer, if_body_start_pos);
+        strncat(obf_buffer, temp_buffer, strlen(temp_buffer));
+        strncat(obf_buffer, &temp_buffer[if_body_start_pos], strlen(temp_buffer) - if_body_start_pos);
+
+        fprintf(obfuscated_file, "%s", obf_buffer);
+        
+        temp_buffer[0] = obf_buffer[0] = '\0';
+        if_expr_start_pos = if_body_start_pos = 0;
+    }
+    else if(strlen(temp_buffer) == 0)
+    {
+        fprintf(obfuscated_file, "%s", token);
+    }
 }
 
 void BeginToken(char *t) 
 {
+    // printf_s("%s\n", t);
     ProcessObfuscation(t);
-    printf_s("%s\n", t);
 
     /*================================================================*/
     /* remember last read token --------------------------------------*/
@@ -233,8 +263,9 @@ int main(int argc, char *argv[])
     obfuscated_file = fopen("obfuscated_result.cl", "w");
 
     buffer = (char*)malloc(lMaxBuffer);
+    temp_buffer = (char*)malloc(lMaxBuffer);
     obf_buffer = (char*)malloc(lMaxBuffer);
-    obf_buffer[0] = '\0';
+    temp_buffer[0] = obf_buffer[0] = '\0';
 
     if (  buffer == NULL  ) {
         printf("cannot allocate %d bytes of memory\n", lMaxBuffer);
@@ -248,6 +279,7 @@ int main(int argc, char *argv[])
     
     free(buffer);
     free(obf_buffer);
+    free(temp_buffer);
     fclose(input_file);
     fclose(obfuscated_file);
 

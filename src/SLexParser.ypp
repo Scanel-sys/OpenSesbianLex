@@ -6,10 +6,12 @@
 
     extern int yylineno;
     extern char * yytext;
+    extern YYLTYPE yylloc;
     extern int yylex();
     extern void AppendObfBuffer();
-    extern YYLTYPE yylloc;
+
     extern int directives_ended;
+    extern int if_processing;
 
     extern void yyerror(const char *s) 
     {
@@ -169,10 +171,10 @@ FUNC_OP:
 |       VAR_DEFI error ';'      { yyerrok; }
 
 IF_EXPR:
-        IF '(' EXPR ')' '{' FUNC_OPS '}'                                        
-|       IF '(' EXPR ')' '{' FUNC_OPS '}'         ELSE '{' FUNC_OPS '}'      
-|       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE_IF
-|       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE_IF ELSE '{' FUNC_OPS '}'
+        IF '(' EXPR ')' '{' FUNC_OPS '}'                                    { if_processing = false; }    
+|       IF '(' EXPR ')' '{' FUNC_OPS '}'         ELSE '{' FUNC_OPS '}'      { if_processing = false; }
+|       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE_IF                            { if_processing = false; }
+|       IF '(' EXPR ')' '{' FUNC_OPS '}' ELSE_IF ELSE '{' FUNC_OPS '}'      { if_processing = false; }
 
 ELSE_IF:
         ELSE IF '(' EXPR ')' '{' FUNC_OPS '}'

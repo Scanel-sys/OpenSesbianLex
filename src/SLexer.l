@@ -10,6 +10,7 @@
     }
 
     extern int directives_ended;
+    extern int if_processing;
 %}
 
 
@@ -36,7 +37,7 @@
 <ML_COMMENT>.     {                
                     BeginToken(yytext); 
                   }
-if              { BeginToken(yytext); return IF; }
+if              { if_processing = true; BeginToken(yytext); return IF; }
 include         { BeginToken(yytext); return INCLUDE; }
 define          { BeginToken(yytext); return DEFINE; }
 ifdef           { BeginToken(yytext); return IFDEF; }
