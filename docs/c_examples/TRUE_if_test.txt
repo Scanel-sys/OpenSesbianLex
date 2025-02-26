@@ -1,4 +1,4 @@
-#include <zalupa>
+#include <directiva>
 #include <chort>
 
 int main()
@@ -11,5 +11,5 @@ int main()
     {
         closeWindow();
     }
-        return;
+    return;
 }

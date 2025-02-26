@@ -49,28 +49,32 @@ PRETYPES:
 |       LONG
 |       SHORT
 
-TYPES_EXT:                      
-        ID                              { directives_ended = true; }
-|       PRETYPES ID                     { directives_ended = true; }
-|       ID PRETYPES                     { directives_ended = true; }
-|       PRETYPES                        { directives_ended = true; }
-|       CONST ID                        { directives_ended = true; }
-|       CONST PRETYPES ID               { directives_ended = true; }
-|       CONST ID PRETYPES               { directives_ended = true; }
-|       CONST PRETYPES                  { directives_ended = true; }
-|       ID           CONST              { directives_ended = true; }
-|       PRETYPES ID  CONST              { directives_ended = true; }
-|       ID PRETYPES  CONST              { directives_ended = true; }
-|       PRETYPES        CONST           { directives_ended = true; }
-|       TYPES                           { directives_ended = true; }
-|       PRETYPES TYPES                  { directives_ended = true; }
-|       TYPES PRETYPES                  { directives_ended = true; }
-|       CONST TYPES                     { directives_ended = true; }
-|       CONST PRETYPES TYPES            { directives_ended = true; }
-|       CONST TYPES PRETYPES            { directives_ended = true; }
-|       TYPES           CONST           { directives_ended = true; }
-|       PRETYPES TYPES  CONST           { directives_ended = true; }
-|       TYPES PRETYPES  CONST           { directives_ended = true; }
+TYPES_EXT: TYPES_EXT_DIRECTIVES_CHECK { directives_ended = true; }
+
+TYPES_EXT_DIRECTIVES_CHECK:
+        ID                              
+|       PRETYPES ID                     
+|       ID PRETYPES                     
+|       PRETYPES                        
+|       CONST ID                        
+|       CONST PRETYPES ID               
+|       CONST ID PRETYPES               
+|       CONST PRETYPES                  
+|       ID           CONST              
+|       PRETYPES ID  CONST              
+|       ID PRETYPES  CONST              
+|       PRETYPES        CONST           
+|       TYPES                           
+|       PRETYPES TYPES                  
+|       TYPES PRETYPES                  
+|       CONST TYPES                     
+|       CONST PRETYPES TYPES            
+|       CONST TYPES PRETYPES            
+|       TYPES           CONST           
+|       PRETYPES TYPES  CONST           
+|       TYPES PRETYPES  CONST           
+
+
 
 TYPES:
         INT

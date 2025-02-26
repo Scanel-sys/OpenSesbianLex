@@ -34,6 +34,10 @@ unsigned int if_body_start_pos = 0;
 unsigned int if_expr_start_pos = 0;
 unsigned int if_expr_end_pos = 0;
 
+char expression_tokens[1000][30];
+char first_expression_tokens[200][30];
+size_t expression_cnt = 0;
+size_t first_expression_cnt = 0;
 
 static int getNextLine(void);
 
@@ -127,29 +131,103 @@ void DumpRow(void)
     fprintf(stdout, "%6d |%.*s", nRow, lBuffer, buffer);
 }
 
+void ObfuscateFirstExpression()
+{
+    for(size_t i = 0; i < first_expression_cnt; i++)
+    {
+        strncat(obf_buffer, first_expression_tokens[i], strlen(first_expression_tokens[i]));
+    }
+}
+
+void ObfuscateFullBlock()
+{
+    for(size_t i = 0; i < expression_cnt; i++)
+    {
+        if(strcmp(expression_tokens[i], "||") == 0)
+        {
+            char* temp_token = "&&";
+            strncat(obf_buffer, temp_token, strlen(temp_token));
+        }
+        else if(strcmp(expression_tokens[i], "&&") == 0)
+        {
+            char* temp_token = "||";
+            strncat(obf_buffer, temp_token, strlen(temp_token));
+        }
+        else if(strcmp(expression_tokens[i], "|") == 0)
+        {
+            char* temp_token = "^";
+            strncat(obf_buffer, temp_token, strlen(temp_token));
+        }
+        else if(strcmp(expression_tokens[i], "&") == 0)
+        {
+            char* temp_token = "|"; 
+            strncat(obf_buffer, temp_token, strlen(temp_token));
+        }
+        else if(strcmp(expression_tokens[i], "+") == 0)
+        {
+            char* temp_token = "*"; 
+            strncat(obf_buffer, temp_token, strlen(temp_token));
+        }
+        else if(strcmp(expression_tokens[i], "-") == 0)
+        {
+            char* temp_token = "+"; 
+            strncat(obf_buffer, temp_token, strlen(temp_token));
+        }
+        else if(strcmp(expression_tokens[i], "%") == 0)
+        {
+            char* temp_token = "/"; 
+            strncat(obf_buffer, temp_token, strlen(temp_token));
+        }
+        else
+        {
+            strncat(obf_buffer, expression_tokens[i], strlen(expression_tokens[i]));
+        }
+    }
+}
+
 void MakeDeadEnd(char* mutBuffer, char* expression_buffer, char* body_buffer)
 {
     strncat(obf_buffer, temp_buffer, if_expr_start_pos);
     strncat(obf_buffer, "!(", strlen("!("));
-    strncat(obf_buffer, expression_buffer, strlen(expression_buffer));
+    ObfuscateFirstExpression();
     strncat(obf_buffer, "))", 2);
-    strncat(obf_buffer, body_buffer, strlen(body_buffer));
+    strncat(obf_buffer, "{", 1);
+    ObfuscateFullBlock();
+    strncat(obf_buffer, "}", 1);
 }
 
 void ProcessObfuscation(char* token)
 {
+    bool first_expression_parsing = false;
+
     if(if_processing == true)
     {
         strncat(temp_buffer, token, strlen(token));
+        strncpy_s(expression_tokens[expression_cnt], token, strlen(token));
+        expression_cnt++;
 
         if(if_expr_start_pos == 0 && token[0] == '(')
+        {
             if_expr_start_pos = strlen(temp_buffer);
-        
+        }
+
         if(if_expr_end_pos == 0 && token[0] == ')')
+        {
             if_expr_end_pos = strlen(temp_buffer) - 1;
+        }
         
         if(if_body_start_pos == 0 && token[0] == '{')
+        {
             if_body_start_pos = strlen(temp_buffer) - 1;
+        }
+
+        first_expression_parsing = (strlen(temp_buffer) != if_expr_start_pos && if_expr_start_pos != 0 && if_expr_end_pos == 0);
+
+        if(first_expression_parsing == true)
+        {
+            strncpy_s(first_expression_tokens[first_expression_cnt], token, strlen(token));
+            first_expression_cnt++;
+        }
     }
 
     if(strlen(temp_buffer) != 0 && if_processing == false)
@@ -167,6 +245,7 @@ void ProcessObfuscation(char* token)
         
         temp_buffer[0] = obf_buffer[0] = '\0';
         if_expr_start_pos = if_body_start_pos = 0;
+        first_expression_cnt = expression_cnt = 0;
     }
     else if(strlen(temp_buffer) == 0)
     {
@@ -176,7 +255,6 @@ void ProcessObfuscation(char* token)
 
 void BeginToken(char *t) 
 {
-    // printf_s("%s\n", t);
     ProcessObfuscation(t);
 
     /*================================================================*/
