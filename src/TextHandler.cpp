@@ -1,4 +1,6 @@
 #include "TextHandler.hpp"
+#include <vector>
+#include <string>
 
 #define true 1
 #define false 0
@@ -30,16 +32,403 @@ extern int yylineno;
 int err = false;
 int directives_ended = false;
 int if_processing = false;
-unsigned int if_body_start_pos = 0;
-unsigned int if_expr_start_pos = 0;
-unsigned int if_expr_end_pos = 0;
-
-char expression_tokens[1000][30];
-char first_expression_tokens[200][30];
-size_t expression_cnt = 0;
-size_t first_expression_cnt = 0;
 
 static int getNextLine(void);
+
+
+class BracesQueue{
+
+public:
+    void push() {braces++;}
+    int pop() 
+    { 
+        if(braces == 1)
+        {
+            braces--;
+            return 0;
+        }
+        else if(braces > 1)
+        {
+            braces--;
+            return 1;
+        }
+
+        return -1;
+    }
+private:
+    size_t braces = 0;
+};
+
+class Obfuscator{
+
+public:
+
+    void push_curly_brace(){ braces_queue_.push(); }
+    int  pop_curly_brace(){ return braces_queue_.pop(); }
+
+    void print_to_file(FILE * file)
+    {
+        for(size_t i = 0; i < output_tokens_.size(); i++)
+        {
+            if(output_tokens_[i] == "[" && i % 2 == 0)
+            {
+                fprintf(obfuscated_file, "%s", "<");
+                fprintf(obfuscated_file, "%s", ":");
+            }
+            else if(output_tokens_[i] == "[" && i % 2 == 1)
+            {
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "(");
+            }
+            else if(output_tokens_[i] == "]" && i % 2 == 0)
+            {
+                fprintf(obfuscated_file, "%s", ":");
+                fprintf(obfuscated_file, "%s", ">");
+            }
+            else if(output_tokens_[i] == "]" && i % 2 == 1)
+            {
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", ")");
+            }
+            else if(output_tokens_[i] == "{" && i % 2 == 0)
+            {
+                fprintf(obfuscated_file, "%s", "<");
+                fprintf(obfuscated_file, "%s", "%");
+            }
+            else if(output_tokens_[i] == "{" && i % 2 == 1)
+            {
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "<");
+            }
+            else if(output_tokens_[i] == "}" && i % 2 == 0)
+            {
+                fprintf(obfuscated_file, "%s", "%");
+                fprintf(obfuscated_file, "%s", ">");
+            }
+            else if(output_tokens_[i] == "}" && i % 2 == 1)
+            {
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", ">");
+            }
+            else if(output_tokens_[i] == "#" && i % 2 == 0)
+            {
+                fprintf(obfuscated_file, "%s", "%");
+                fprintf(obfuscated_file, "%s", ":");
+            }
+            else if(output_tokens_[i] == "#" && i % 2 == 1)
+            {
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "=");
+            }
+            else if(output_tokens_[i] == "\\")
+            {
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "/");
+            }
+            else if(output_tokens_[i] == "^")
+            {
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "'");
+            }
+            else if(output_tokens_[i] == "|")
+            {
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "!");
+            }
+            else if(output_tokens_[i] == "~")
+            {
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "?");
+                fprintf(obfuscated_file, "%s", "-");
+            }
+            else
+                fprintf(obfuscated_file, "%s", output_tokens_[i].data());
+        }
+        output_tokens_.clear();
+    }
+
+    void push_first_expression_token(char* token)   { first_expression_tokens_.push_back(token); }
+    void push_first_expression_token(std::string token)         { first_expression_tokens_.push_back(token); }
+
+    void push_expression_token(char* token)         { expression_tokens_.push_back(token); }
+    void push_expression_token(std::string token)   { expression_tokens_.push_back(token); }
+
+    void push_temp_token(char* token)               { temp_tokens_.push_back(token); }
+    void push_temp_token(std::string token)         { temp_tokens_.push_back(token); }
+
+    void push_body_token(char* token)               { body_tokens_.push_back(token); }
+    void push_body_token(std::string token)         { body_tokens_.push_back(token); }
+
+    void push_output_token(char* token)             { output_tokens_.push_back(token); }
+    void push_output_token(std::string token)       { output_tokens_.push_back(token); }
+                                                    
+
+    size_t get_first_expression_tokens_size()  { return first_expression_tokens_.size(); }
+    size_t get_expression_tokens_size()        { return expression_tokens_.size(); }
+    size_t get_temp_tokens_size()              { return temp_tokens_.size(); }
+    size_t get_body_tokens_size()              { return body_tokens_.size(); }
+    size_t get_output_tokens_size()            { return output_tokens_.size(); }
+
+    void obfuscate_output_tokens()
+    {
+        for(size_t i = 0; i < get_output_tokens_size(); i++)
+        {
+            if(output_tokens_[i] == "[" && i % 2 == 0)
+                output_tokens_[i].assign("<:");
+            
+            else if(output_tokens_[i] == "[" && i % 2 == 1)
+                output_tokens_[i].assign("??(");
+
+            else if(output_tokens_[i] == "]" && i % 2 == 0)
+                output_tokens_[i].assign(":>");
+            
+            else if(output_tokens_[i] == "]" && i % 2 == 1)
+                output_tokens_[i].assign("??)");
+
+            else if(output_tokens_[i] == "{" && i % 2 == 0)
+                output_tokens_[i].assign("<%");
+
+            else if(output_tokens_[i] == "{" && i % 2 == 1)
+                output_tokens_[i].assign("??<");
+
+            else if(output_tokens_[i] == "}" && i % 2 == 0)
+                output_tokens_[i].assign("%>");
+
+            else if(output_tokens_[i] == "}" && i % 2 == 1)
+                output_tokens_[i].assign("??>");
+
+            else if(output_tokens_[i] == "#" && i % 2 == 0)
+                output_tokens_[i].assign("%:");
+
+            else if(output_tokens_[i] == "#" && i % 2 == 1)
+                output_tokens_[i].assign("??=");
+            
+            else if(output_tokens_[i] == "\\")
+                output_tokens_[i].assign("??/");
+
+            else if(output_tokens_[i] == "^")
+                output_tokens_[i].assign("??'");
+
+            else if(output_tokens_[i] == "|")
+                output_tokens_[i].assign("??!");
+
+            else if(output_tokens_[i] == "~")
+                output_tokens_[i].assign("??-");
+            
+        }
+    }
+
+    void push_tokens(std::vector<std::string>& dest, std::vector<std::string>& source, size_t start, size_t cnt)
+    {
+        for(size_t i = start; i < cnt; i++)
+        {
+            dest.push_back(source[i]);
+        }
+    }
+
+    void push_tokens(std::vector<std::string>& dest, std::vector<std::string> source, size_t cnt)
+    {
+        for(size_t i = 0; i < cnt; i++)
+        {
+            dest.push_back(source[i]);
+        }
+    }
+
+    void push_tokens(std::vector<std::string>& dest, std::vector<std::string>& source)
+    {
+        for(size_t i = 0; i < source.size(); i++)
+            dest.push_back(source[i]);
+    }
+
+    std::vector<std::string>& get_first_expression_tokens() { return first_expression_tokens_; }
+    std::vector<std::string>& get_expression_tokens()       { return expression_tokens_; }
+    std::vector<std::string>& get_body_tokens()             { return body_tokens_; }
+    std::vector<std::string>& get_temp_tokens()             { return temp_tokens_; }
+    std::vector<std::string>& get_output_tokens()           { return output_tokens_; }
+
+    void clear_first_expression_tokens()    { first_expression_tokens_.clear(); }
+    void clear_expression_tokens()          { expression_tokens_.clear(); }
+    void clear_body_tokens()                { body_tokens_.clear(); }
+    void clear_temp_tokens()                { temp_tokens_.clear(); }
+    void clear_output_tokens()              { output_tokens_.clear(); }
+
+    
+    void ProcessToken(char* token)
+    {
+        bool first_expression_parsing = false;
+
+        if(if_processing == true)
+        {
+            push_temp_token(token);
+            push_expression_token(token);
+
+            if(if_expr_start_pos_ == 0 && token[0] == '(')
+            {
+                if_expr_start_pos_ = get_temp_tokens_size();
+            }
+
+            if(if_expr_end_pos_ == 0 && token[0] == ')')
+            {
+                if_expr_end_pos_ = get_temp_tokens_size() - 1;
+            }
+            
+            if(if_body_start_pos_ == 0 && token[0] == '{')
+            {
+                if_body_start_pos_ = get_temp_tokens_size();
+            }
+
+            first_expression_parsing = (get_temp_tokens_size() != if_expr_start_pos_ && if_expr_start_pos_ != 0 && if_expr_end_pos_ == 0);
+
+            if(first_expression_parsing == true)
+            {
+                push_first_expression_token(token);
+            }
+
+            if(strcmp(token, "{") == 0)
+            {
+                push_curly_brace();
+            }
+            else if(strcmp(token, "}") == 0 && pop_curly_brace() == 0)
+            {
+                if_processing = false;
+            }
+        }
+
+        if(get_temp_tokens_size() != 0 && if_processing == false)
+        {
+            push_tokens(body_tokens_, temp_tokens_, if_body_start_pos_, get_temp_tokens_size() - if_body_start_pos_ - 1);
+            push_tokens(output_tokens_, temp_tokens_, if_body_start_pos_ + 1);
+            make_dead_end();
+            push_tokens(output_tokens_, body_tokens_, get_body_tokens_size());
+            push_output_token("}");
+
+            print_to_file(obfuscated_file);
+            clear_temp_tokens();
+            clear_output_tokens();      
+            clear_expression_tokens();
+            clear_body_tokens();
+
+            if_expr_start_pos_ = if_body_start_pos_ = 0;
+            if_expr_end_pos_ = 0;
+            clear_first_expression_tokens();
+            clear_expression_tokens();
+        }
+        else if(get_temp_tokens_size() == 0)
+        {
+            push_output_token(token);
+            print_to_file(obfuscated_file);
+        }
+
+    }
+
+private:
+
+    std::vector<std::string> first_expression_tokens_;
+    std::vector<std::string> expression_tokens_;
+    std::vector<std::string> temp_tokens_;
+    std::vector<std::string> body_tokens_;
+    std::vector<std::string> output_tokens_;
+
+    class BracesQueue braces_queue_;
+
+    unsigned int if_body_start_pos_ = 0;
+    unsigned int if_expr_start_pos_ = 0;
+    unsigned int if_expr_end_pos_   = 0;
+
+    void make_dead_end()
+    {
+        push_tokens(output_tokens_, temp_tokens_, if_expr_start_pos_);
+        push_output_token("!(");
+        ObfuscateFirstExpression();
+        push_output_token("))");
+        push_output_token("{");
+        ObfuscateFullBlock();
+        push_output_token("}");
+    }
+
+    void ObfuscateFirstExpression()
+    {
+        for(size_t i = 0; i < get_first_expression_tokens_size(); i++)
+        {
+            push_output_token(first_expression_tokens_[i]);
+        }
+    }
+
+    void ObfuscateFullBlock()
+    {
+        for(size_t i = 0; i < get_expression_tokens_size(); i++)
+        {
+            if(expression_tokens_[i] == "||")
+            {
+                push_output_token("&&");
+            }
+            else if(expression_tokens_[i] == "&&")
+            {
+                push_output_token("||");
+            }
+            else if(expression_tokens_[i] == "|")
+            {
+                push_output_token("^");
+            }
+            else if(expression_tokens_[i] == "&")
+            {
+                push_output_token("|");
+            }
+            else if(expression_tokens_[i] == "+")
+            {
+                push_output_token("*");
+            }
+            else if(expression_tokens_[i] == "-")
+            {
+                push_output_token("+");
+            }
+            else if(expression_tokens_[i] == "%")
+            {
+                push_output_token("/");
+            }
+            else if(expression_tokens_[i] == ">=")
+            {
+                push_output_token("<");
+            }
+            else if(expression_tokens_[i] == "<=")
+            {
+                push_output_token(">");
+            }
+            else if(expression_tokens_[i] == "<")
+            {
+                push_output_token(">=");
+            }
+            else if(expression_tokens_[i] == ">")
+            {
+                push_output_token("=<");
+            }
+            else if(expression_tokens_[i] == "++")
+            {
+                push_output_token("--");
+            }
+            else if(expression_tokens_[i] == "--")
+            {
+                push_output_token("++");
+            }
+            else
+            {
+                push_output_token(expression_tokens_[i]);
+            }
+        }
+    }
+};
+
+
+Obfuscator obfuscator;
+
 
 /*--------------------------------------------------------------------
  * dumpChar
@@ -131,131 +520,11 @@ void DumpRow(void)
     fprintf(stdout, "%6d |%.*s", nRow, lBuffer, buffer);
 }
 
-void ObfuscateFirstExpression()
-{
-    for(size_t i = 0; i < first_expression_cnt; i++)
-    {
-        strncat(obf_buffer, first_expression_tokens[i], strlen(first_expression_tokens[i]));
-    }
-}
 
-void ObfuscateFullBlock()
-{
-    for(size_t i = 0; i < expression_cnt; i++)
-    {
-        if(strcmp(expression_tokens[i], "||") == 0)
-        {
-            char* temp_token = "&&";
-            strncat(obf_buffer, temp_token, strlen(temp_token));
-        }
-        else if(strcmp(expression_tokens[i], "&&") == 0)
-        {
-            char* temp_token = "||";
-            strncat(obf_buffer, temp_token, strlen(temp_token));
-        }
-        else if(strcmp(expression_tokens[i], "|") == 0)
-        {
-            char* temp_token = "^";
-            strncat(obf_buffer, temp_token, strlen(temp_token));
-        }
-        else if(strcmp(expression_tokens[i], "&") == 0)
-        {
-            char* temp_token = "|"; 
-            strncat(obf_buffer, temp_token, strlen(temp_token));
-        }
-        else if(strcmp(expression_tokens[i], "+") == 0)
-        {
-            char* temp_token = "*"; 
-            strncat(obf_buffer, temp_token, strlen(temp_token));
-        }
-        else if(strcmp(expression_tokens[i], "-") == 0)
-        {
-            char* temp_token = "+"; 
-            strncat(obf_buffer, temp_token, strlen(temp_token));
-        }
-        else if(strcmp(expression_tokens[i], "%") == 0)
-        {
-            char* temp_token = "/"; 
-            strncat(obf_buffer, temp_token, strlen(temp_token));
-        }
-        else
-        {
-            strncat(obf_buffer, expression_tokens[i], strlen(expression_tokens[i]));
-        }
-    }
-}
-
-void MakeDeadEnd(char* mutBuffer, char* expression_buffer, char* body_buffer)
-{
-    strncat(obf_buffer, temp_buffer, if_expr_start_pos);
-    strncat(obf_buffer, "!(", strlen("!("));
-    ObfuscateFirstExpression();
-    strncat(obf_buffer, "))", 2);
-    strncat(obf_buffer, "{", 1);
-    ObfuscateFullBlock();
-    strncat(obf_buffer, "}", 1);
-}
-
-void ProcessObfuscation(char* token)
-{
-    bool first_expression_parsing = false;
-
-    if(if_processing == true)
-    {
-        strncat(temp_buffer, token, strlen(token));
-        strncpy_s(expression_tokens[expression_cnt], token, strlen(token));
-        expression_cnt++;
-
-        if(if_expr_start_pos == 0 && token[0] == '(')
-        {
-            if_expr_start_pos = strlen(temp_buffer);
-        }
-
-        if(if_expr_end_pos == 0 && token[0] == ')')
-        {
-            if_expr_end_pos = strlen(temp_buffer) - 1;
-        }
-        
-        if(if_body_start_pos == 0 && token[0] == '{')
-        {
-            if_body_start_pos = strlen(temp_buffer) - 1;
-        }
-
-        first_expression_parsing = (strlen(temp_buffer) != if_expr_start_pos && if_expr_start_pos != 0 && if_expr_end_pos == 0);
-
-        if(first_expression_parsing == true)
-        {
-            strncpy_s(first_expression_tokens[first_expression_cnt], token, strlen(token));
-            first_expression_cnt++;
-        }
-    }
-
-    if(strlen(temp_buffer) != 0 && if_processing == false)
-    {
-        char expression_buffer[lMaxBuffer];
-        char body_buffer[lMaxBuffer];
-        strncpy_s(expression_buffer, &temp_buffer[if_expr_start_pos], if_expr_end_pos - if_expr_start_pos);
-        strncpy_s(body_buffer, &temp_buffer[if_body_start_pos], strlen(temp_buffer) - if_body_start_pos);
-
-        strncat(obf_buffer, temp_buffer, if_body_start_pos + 1);
-        MakeDeadEnd(obf_buffer, expression_buffer, body_buffer);
-        strncat(obf_buffer, &body_buffer[1], strlen(body_buffer));
-
-        fprintf(obfuscated_file, "%s", obf_buffer);
-        
-        temp_buffer[0] = obf_buffer[0] = '\0';
-        if_expr_start_pos = if_body_start_pos = 0;
-        first_expression_cnt = expression_cnt = 0;
-    }
-    else if(strlen(temp_buffer) == 0)
-    {
-        fprintf(obfuscated_file, "%s", token);
-    }
-}
 
 void BeginToken(char *t) 
 {
-    ProcessObfuscation(t);
+    obfuscator.ProcessToken(t);
 
     /*================================================================*/
     /* remember last read token --------------------------------------*/
@@ -345,7 +614,6 @@ int getNextLine(void) {
 
     nRow += 1;
     lBuffer = strlen(buffer);
-    // ProcessObfuscation();                   // print all file lines
 
     /*================================================================*/
     return 0;
@@ -372,6 +640,8 @@ int main(int argc, char *argv[])
     
     if (  getNextLine() == 0  )
         yyparse();
+
+    obfuscator.print_to_file(obfuscated_file);
     
     free(buffer);
     free(obf_buffer);

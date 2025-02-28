@@ -20,7 +20,7 @@
 %%
 
 [/][/].*\n      {
-                  BeginToken(yytext);
+                  // BeginToken(yytext);
                 } // comment
 <INITIAL>"/*"     {
                     BeginToken(yytext); 
@@ -119,12 +119,16 @@ __kernel        { BeginToken(yytext); return KERNEL; }
                   BeginToken(yytext);
                 }
 
-[ \t\r\n]       {
-                  // if(directives_ended == false)
-                  // {
-                        BeginToken(yytext);
-                  // }
+[ ]             {
+                  BeginToken(yytext);
                 }
+
+[\t\r\n]          {
+                        if(directives_ended == false)
+                        {
+                              BeginToken(yytext);
+                        }
+                  }
 
 ([0-9]+[eE][+-]{0,1}[0-9]+)|([0-9]*"."[0-9]*([eE][+-]{0,1}[0-9]+)?)"f"? {
                   BeginToken(yytext); 
