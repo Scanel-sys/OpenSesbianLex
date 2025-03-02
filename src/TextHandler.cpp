@@ -35,6 +35,7 @@ int err = false;
 int directives_ended = false;
 int if_processing = false;
 int if_id = false;
+int if_type = false;
 
 std::vector<std::string> ids;
 std::map<std::string, int> ids_dict;
@@ -154,7 +155,7 @@ public:
 
     void push_tokens(std::vector<std::string>& dest, std::vector<std::string>& source, size_t start, size_t cnt)
     {
-        for(size_t i = start; i < cnt; i++)
+        for(size_t i = start; i < start + cnt; i++)
         {
             dest.push_back(source[i]);
         }
@@ -231,6 +232,7 @@ public:
         if(get_temp_tokens_size() != 0 && if_processing == false)
         {
             push_tokens(body_tokens_, temp_tokens_, if_body_start_pos_, get_temp_tokens_size() - if_body_start_pos_ - 1);
+
             push_tokens(output_tokens_, temp_tokens_, if_body_start_pos_ + 1);
             make_dead_end();
             push_tokens(output_tokens_, body_tokens_, get_body_tokens_size());
