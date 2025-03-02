@@ -1,6 +1,8 @@
 #include "TextHandler.hpp"
 #include <vector>
 #include <string>
+#include <map>
+#include <iostream>
 
 #define true 1
 #define false 0
@@ -32,6 +34,10 @@ extern int yylineno;
 int err = false;
 int directives_ended = false;
 int if_processing = false;
+int if_id = false;
+
+std::vector<std::string> ids;
+std::map<std::string, int> ids_dict;
 
 static int getNextLine(void);
 
@@ -70,87 +76,7 @@ public:
     {
         for(size_t i = 0; i < output_tokens_.size(); i++)
         {
-            if(output_tokens_[i] == "[" && i % 2 == 0)
-            {
-                fprintf(obfuscated_file, "%s", "<");
-                fprintf(obfuscated_file, "%s", ":");
-            }
-            else if(output_tokens_[i] == "[" && i % 2 == 1)
-            {
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "(");
-            }
-            else if(output_tokens_[i] == "]" && i % 2 == 0)
-            {
-                fprintf(obfuscated_file, "%s", ":");
-                fprintf(obfuscated_file, "%s", ">");
-            }
-            else if(output_tokens_[i] == "]" && i % 2 == 1)
-            {
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", ")");
-            }
-            else if(output_tokens_[i] == "{" && i % 2 == 0)
-            {
-                fprintf(obfuscated_file, "%s", "<");
-                fprintf(obfuscated_file, "%s", "%");
-            }
-            else if(output_tokens_[i] == "{" && i % 2 == 1)
-            {
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "<");
-            }
-            else if(output_tokens_[i] == "}" && i % 2 == 0)
-            {
-                fprintf(obfuscated_file, "%s", "%");
-                fprintf(obfuscated_file, "%s", ">");
-            }
-            else if(output_tokens_[i] == "}" && i % 2 == 1)
-            {
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", ">");
-            }
-            else if(output_tokens_[i] == "#" && i % 2 == 0)
-            {
-                fprintf(obfuscated_file, "%s", "%");
-                fprintf(obfuscated_file, "%s", ":");
-            }
-            else if(output_tokens_[i] == "#" && i % 2 == 1)
-            {
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "=");
-            }
-            else if(output_tokens_[i] == "\\")
-            {
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "/");
-            }
-            else if(output_tokens_[i] == "^")
-            {
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "'");
-            }
-            else if(output_tokens_[i] == "|")
-            {
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "!");
-            }
-            else if(output_tokens_[i] == "~")
-            {
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "?");
-                fprintf(obfuscated_file, "%s", "-");
-            }
-            else
-                fprintf(obfuscated_file, "%s", output_tokens_[i].data());
+            fprintf(obfuscated_file, "%s", output_tokens_[i].data());
         }
         output_tokens_.clear();
     }
@@ -524,6 +450,12 @@ void DumpRow(void)
 
 void BeginToken(char *t) 
 {
+    if(if_id == true)
+    {
+        std::string temp_str(t);
+        ids_dict.insert({temp_str, 1});
+        if_id = false;
+    }
     obfuscator.ProcessToken(t);
 
     /*================================================================*/
@@ -643,6 +575,9 @@ int main(int argc, char *argv[])
 
     obfuscator.print_to_file(obfuscated_file);
     
+    for (auto i : ids_dict)
+        std::cout << i.first << '\n';
+
     free(buffer);
     free(obf_buffer);
     free(temp_buffer);

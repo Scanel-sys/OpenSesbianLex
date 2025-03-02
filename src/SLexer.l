@@ -11,6 +11,7 @@
 
     extern int directives_ended;
     extern int if_processing;
+    extern int if_id;
 %}
 
 
@@ -124,7 +125,7 @@ __kernel        { BeginToken(yytext); return KERNEL; }
                 }
 
 [\t\r\n]          {
-                        if(directives_ended == false)
+                        // if(directives_ended == false)
                         {
                               BeginToken(yytext);
                         }
@@ -200,16 +201,17 @@ __kernel        { BeginToken(yytext); return KERNEL; }
                     return *yytext; 
                   }
 [a-zA-Z_][a-zA-Z0-9_]*  {
+                          if_id = true;
                           BeginToken(yytext); 
                           yylval = (int)*yytext;
                           return ID;
                         }
 
 [a-zA-Z_][a-zA-Z0-9_]*"."[a-zA-Z0-9_]+  {
-                          BeginToken(yytext); 
-                          yylval = (int)*yytext;
-                          return STRUCT_ID;
-                        }
+                                          BeginToken(yytext); 
+                                          yylval = (int)*yytext;
+                                          return STRUCT_ID;
+                                          }
 
 .               {
                   BeginToken(yytext);
