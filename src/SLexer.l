@@ -52,6 +52,8 @@ while           { BeginToken(yytext); return WHILE; }
 do              { BeginToken(yytext); return DO; }
 return          { if_type = true; BeginToken(yytext); return RETURN; }
 print           { BeginToken(yytext); return PRINT; }
+break           { BeginToken(yytext); return BREAK; }
+conitnue        { BeginToken(yytext); return CONTINUE; }
 int             { if_type = true; BeginToken(yytext); return INT; }
 char            { if_type = true; BeginToken(yytext); return CHAR; }
 float           { if_type = true; BeginToken(yytext); return FLOAT; }
@@ -131,7 +133,7 @@ __kernel        { if_type = true; BeginToken(yytext); return KERNEL; }
                 }
 
 [\r\t\n]          {
-                        // if(directives_ended == false)
+                        if(directives_ended == false)
                         {
                             BeginToken(yytext);
                         }

@@ -37,6 +37,9 @@ int if_processing = false;
 int if_id = false;
 int if_type = false;
 
+std::string last_token;
+std::string act_token;
+
 std::vector<std::string> ids;
 std::map<std::string, int> ids_dict;
 
@@ -233,7 +236,7 @@ public:
         {
             push_tokens(body_tokens_, temp_tokens_, if_body_start_pos_, get_temp_tokens_size() - if_body_start_pos_ - 1);
 
-            push_tokens(output_tokens_, temp_tokens_, if_body_start_pos_ + 1);
+            push_tokens(output_tokens_, temp_tokens_, if_body_start_pos_);
             make_dead_end();
             push_tokens(output_tokens_, body_tokens_, get_body_tokens_size());
             push_output_token("}");
@@ -452,11 +455,20 @@ void DumpRow(void)
 
 void BeginToken(char *t) 
 {
+    act_token = t;
     if(if_id == true)
     {
-        std::string temp_str(t);
-        ids_dict.insert({temp_str, 1});
+        last_token = t;
         if_id = false;
+    }
+    else if(act_token != "(" && !last_token.empty())
+    {
+        ids_dict.insert({last_token, 1});
+        last_token.clear();
+    }
+    else
+    {
+        last_token.clear();
     }
     obfuscator.ProcessToken(t);
 

@@ -29,7 +29,7 @@
 
 %start PROGRAM 
 %token DIGIT
-%token IF ELSE WHILE DO FOR RETURN
+%token IF ELSE WHILE DO FOR RETURN BREAK CONTINUE
 %token EQ LE GE NE
 %token AND OR 
 %token INCLUDE DEFINE TYPEDEF IFDEF IFNDEF ENDIF
@@ -163,6 +163,8 @@ FUNC_OP:
 |       WHILE_OP
 |       DO_WHILE_OP
 |       ARR_ASSIGN              ';'
+|       BREAK                   ';'
+|       CONTINUE                ';'
 |       RETURN                  ';'
 |       RETURN FUNCTOR          ';'
 |       RETURN EXPR             ';'
