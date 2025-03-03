@@ -66,6 +66,7 @@ float32         { if_type = true; BeginToken(yytext); return FLOAT; }
 double          { if_type = true; BeginToken(yytext); return DOUBLE; }
 const           { if_type = true; BeginToken(yytext); return CONST; }
 unsigned        { if_type = true; BeginToken(yytext); return UNSIGNED; }
+size_t          { if_type = true; BeginToken(yytext); return SIZE_T; }
 long            { if_type = true; BeginToken(yytext); return LONG; }
 short           { if_type = true; BeginToken(yytext); return SHORT; }
 void            { if_type = true; BeginToken(yytext); return VOID; }
@@ -145,11 +146,7 @@ __kernel        { if_type = true; BeginToken(yytext); return KERNEL; }
 }
 
 
-"size_t" {
-            if_type = true; 
-            BeginToken(yytext); 
-            return SIZE_T;
-}
+
 
 "-=" {
       BeginToken(yytext); 

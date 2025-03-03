@@ -629,6 +629,7 @@ int main(int argc, char *argv[])
         yyparse();
 
     obfuscator.ObfuscateIds();
+    obfuscator.obfuscate_output_tokens();
     obfuscator.print_to_file(obfuscated_file);
     
     for (auto i : ids_dict)
