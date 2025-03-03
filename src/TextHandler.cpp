@@ -1,13 +1,18 @@
 #include "TextHandler.hpp"
+
 #include <vector>
 #include <string>
 #include <map>
 #include <iostream>
+#include <ctime>
+#include <algorithm>
 
 #define true 1
 #define false 0
 #define PREAMBULA_SIZE 7
 #define lMaxBuffer      1000
+#define MIN_NAME_SIZE   7
+#define MAX_NAME_SIZE   1024
 /*
  * global variable
  */
@@ -40,8 +45,8 @@ int if_type = false;
 std::string last_token;
 std::string act_token;
 
-std::vector<std::string> ids;
 std::map<std::string, int> ids_dict;
+std::map<std::string, std::string> ids_dict_with_new_names;
 
 static int getNextLine(void);
 
@@ -241,9 +246,7 @@ public:
             push_tokens(output_tokens_, body_tokens_, get_body_tokens_size());
             push_output_token("}");
 
-            print_to_file(obfuscated_file);
             clear_temp_tokens();
-            clear_output_tokens();      
             clear_expression_tokens();
             clear_body_tokens();
 
@@ -255,9 +258,27 @@ public:
         else if(get_temp_tokens_size() == 0)
         {
             push_output_token(token);
-            print_to_file(obfuscated_file);
+        }
+    }
+
+    void ObfuscateIds()
+    {
+        for (auto i : ids_dict)
+        {
+            std::string new_name;
+            std::string old_name = i.first;
+            do
+            {
+                new_name = GetRandomName((MIN_NAME_SIZE + i.first.size()) % MAX_NAME_SIZE);
+            } while (ids_dict.find(new_name) != ids_dict.end());
+
+            ids_dict_with_new_names.insert({old_name, new_name});
         }
 
+        for (auto id : ids_dict_with_new_names)
+        {
+            std::replace(output_tokens_.begin(), output_tokens_.end(), id.first, id.second);
+        }
     }
 
 private:
@@ -354,6 +375,31 @@ private:
                 push_output_token(expression_tokens_[i]);
             }
         }
+    }
+
+    std::string GetRandomName(const int len) 
+    {
+        static const char alphanum[] =
+            "0123456789"
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "abcdefghijklmnopqrstuvwxyz";
+
+        static const char alphanum_no_ciphs[] =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+            "abcdefghijklmnopqrstuvwxyz";
+
+        std::string tmp_s;
+        tmp_s.reserve(len);
+
+        for (int i = 0; i < len; ++i) 
+        {
+            if(i != 0)
+                tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
+            else
+                tmp_s += alphanum_no_ciphs[rand() % (sizeof(alphanum_no_ciphs) - 1)];
+        }
+        
+        return tmp_s;
     }
 };
 
@@ -493,11 +539,6 @@ void BeginToken(char *t)
     }
 }
 
-void AppendObfBuffer(char* code_string)
-{
-    strcat(obf_buffer, code_string);
-}
-
 /*--------------------------------------------------------------------
 * GetNextChar
 * 
@@ -587,6 +628,7 @@ int main(int argc, char *argv[])
     if (  getNextLine() == 0  )
         yyparse();
 
+    obfuscator.ObfuscateIds();
     obfuscator.print_to_file(obfuscated_file);
     
     for (auto i : ids_dict)
