@@ -14,6 +14,20 @@
 %x STR
 %x ML_COMMENT
 
+DIGIT                           [0-9]
+HEX_DIGIT                       [0-9a-fA-F]
+DECIMAL_EXPONENT                [eE][+-]?{DIGIT}+
+BINARY_EXPONENT                 [pP][+-]?{DIGIT}+
+FLOAT_SUFFIX                    [fFlLhH]
+DECIMAL_FRACTION                ({DIGIT}+\.{DIGIT}*|\.{DIGIT}+)
+HEXADECIMAL_FRACTION            ({HEX_DIGIT}+\.{HEX_DIGIT}*|\.{HEX_DIGIT}+)
+DECIMAL_FLOAT                   ({DECIMAL_FRACTION}({DECIMAL_EXPONENT})?|{DIGIT}+{DECIMAL_EXPONENT}){FLOAT_SUFFIX}?
+HEXADECIMAL_FLOAT               0[xX]({HEXADECIMAL_FRACTION}{BINARY_EXPONENT}|{HEX_DIGIT}+{BINARY_EXPONENT}){FLOAT_SUFFIX}?
+MALFORMED_DECIMAL_EXPONENT      ({DECIMAL_FRACTION}|{DIGIT}+)[eE][+-]?
+MALFORMED_HEXADECIMAL_EXPONENT  0[xX]({HEXADECIMAL_FRACTION}|{HEX_DIGIT}+)[pP][+-]?
+MALFORMED_HEXADECIMAL_FRACTION  0[xX]{HEXADECIMAL_FRACTION}
+MALFORMED_FLOAT                 ({MALFORMED_DECIMAL_EXPONENT}|{MALFORMED_HEXADECIMAL_EXPONENT}|{MALFORMED_HEXADECIMAL_FRACTION})
+
 %%
 
 [/][/].*\n      {
@@ -76,7 +90,17 @@ __kernel        { BeginToken(yytext); return KERNEL; }
 &&              { BeginToken(yytext); return AND; }
 [|][|]          { BeginToken(yytext); return OR;  }
 
-[0-9]           { 
+{HEXADECIMAL_FLOAT}|{DECIMAL_FLOAT} {
+                  BeginToken(yytext);
+                  return FLOAT_NUM;
+                }
+
+{MALFORMED_FLOAT} {
+                  BeginToken(yytext);
+                  return INVALID_FLOAT;
+                }
+
+{DIGIT}         {
                   BeginToken(yytext);
                   yylval = (int)*yytext;
                   return DIGIT;
@@ -117,12 +141,6 @@ __kernel        { BeginToken(yytext); return KERNEL; }
                 }
 
 [ \t\r\n]       BeginToken(yytext); // whitespace
-
-([0-9]+[eE][+-]{0,1}[0-9]+)|([0-9]*"."[0-9]*([eE][+-]{0,1}[0-9]+)?)"f"? {
-                  BeginToken(yytext); 
-                  return FLOAT_NUM;
-}
-
 
 "size_t" {
           BeginToken(yytext); 

@@ -103,3 +103,13 @@ For a Visual Studio Release build on Windows use
 - `1` — the input contains a syntax error
 - `2` — invalid command-line usage, such as a missing input path
 - `3` — the input file could not be opened or read
+
+## Floating-point literals
+
+The lexer accepts the C/OpenCL decimal forms `1.`, `.5`, `1.0`, `1e5`, and
+`1.0e-5`, including the `f`/`F`, `l`/`L`, and OpenCL `h`/`H` suffixes.
+Hexadecimal floating-point literals use a mandatory binary exponent, for
+example `0x1.fp3`, `0x1p0f`, or `0x1.ffcp15h`.
+
+A standalone `.`, an exponent without digits such as `1e+`, and a hexadecimal
+fraction without a complete `p`/`P` exponent are rejected.

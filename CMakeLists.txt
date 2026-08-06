@@ -95,6 +95,9 @@ if(BUILD_TESTING)
     add_parser_test(c.valid.typedef docs/c_examples/TRUE_typedef_test 0)
 
     add_parser_test(c.invalid.if docs/c_examples/FALSE_if_test.txt 1)
+    add_parser_test(c.invalid.float_dot docs/c_examples/FALSE_float_dot_test.txt 1)
+    add_parser_test(c.invalid.float_exponent docs/c_examples/FALSE_float_exponent_test.txt 1)
+    add_parser_test(c.invalid.hex_float_exponent docs/c_examples/FALSE_hex_float_exponent_test.txt 1)
     add_parser_test(c.invalid.program_1 docs/c_examples/FALSE_prog_1.txt 1)
     add_parser_test(c.invalid.program_2 docs/c_examples/FALSE_prog_2_test.txt 1)
     add_parser_test(c.invalid.program_3 docs/c_examples/FALSE_prog_3.txt 1)
@@ -146,6 +149,9 @@ if(BUILD_TESTING)
     )
     set_tests_properties(
         c.invalid.if
+        c.invalid.float_dot
+        c.invalid.float_exponent
+        c.invalid.hex_float_exponent
         c.invalid.program_1
         c.invalid.program_2
         c.invalid.program_3
