@@ -72,17 +72,42 @@ endif()
 install(TARGETS OpenSLex RUNTIME DESTINATION bin)
 
 if(BUILD_TESTING)
-    function(add_parser_test test_name relative_input expected_exit_code)
+    function(add_parser_file_test test_name input_file expected_exit_code)
+        set(extra_test_arguments)
+        if(ARGC GREATER 3)
+            list(APPEND extra_test_arguments
+                "-DEXPECTED_STDERR_PATTERN=${ARGV3}"
+            )
+        endif()
+
         add_test(
             NAME "${test_name}"
             COMMAND
                 "${CMAKE_COMMAND}"
                 "-DPARSER=$<TARGET_FILE:OpenSLex>"
-                "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/${relative_input}"
+                "-DINPUT=${input_file}"
                 "-DEXPECTED_EXIT_CODE=${expected_exit_code}"
+                ${extra_test_arguments}
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunParserTest.cmake"
         )
         set_tests_properties("${test_name}" PROPERTIES TIMEOUT 10)
+    endfunction()
+
+    function(add_parser_test test_name relative_input expected_exit_code)
+        if(ARGC GREATER 3)
+            add_parser_file_test(
+                "${test_name}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/${relative_input}"
+                "${expected_exit_code}"
+                "${ARGV3}"
+            )
+        else()
+            add_parser_file_test(
+                "${test_name}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/${relative_input}"
+                "${expected_exit_code}"
+            )
+        endif()
     endfunction()
 
     add_parser_test(c.valid.array docs/c_examples/TRUE_array_test.txt 0)
@@ -107,6 +132,60 @@ if(BUILD_TESTING)
     add_parser_test(opencl.valid.image_filtering docs/cl_examples/image_filtering.cl 0)
     add_parser_test(opencl.valid.mandelbrot docs/cl_examples/mandelbrot.cl 0)
     add_parser_test(opencl.valid.matrix_multiplication docs/cl_examples/matrix_multiplication.cl 0)
+    add_parser_test(opencl.valid.strings docs/cl_examples/string_literals.cl 0)
+    add_parser_test(
+        opencl.invalid.string_escape
+        docs/cl_examples/FALSE_string_escape.cl
+        1
+        "invalid string literal"
+    )
+    add_parser_test(
+        opencl.invalid.string_newline
+        docs/cl_examples/FALSE_string_newline.cl
+        1
+        "invalid string literal"
+    )
+
+    set(OPEN_SLEX_GENERATED_TEST_DIR "${CMAKE_CURRENT_BINARY_DIR}/test-inputs")
+    file(MAKE_DIRECTORY "${OPEN_SLEX_GENERATED_TEST_DIR}")
+
+    set(OPEN_SLEX_LINE_COMMENT_EOF
+        "${OPEN_SLEX_GENERATED_TEST_DIR}/line-comment-at-eof.cl"
+    )
+    file(WRITE "${OPEN_SLEX_LINE_COMMENT_EOF}"
+        "__kernel void comment_at_eof() {}\n// comment without final newline"
+    )
+    add_parser_file_test(
+        opencl.valid.line_comment_at_eof
+        "${OPEN_SLEX_LINE_COMMENT_EOF}"
+        0
+    )
+
+    set(OPEN_SLEX_UNTERMINATED_STRING_EOF
+        "${OPEN_SLEX_GENERATED_TEST_DIR}/unterminated-string-at-eof.cl"
+    )
+    file(WRITE "${OPEN_SLEX_UNTERMINATED_STRING_EOF}"
+        "__kernel void string_at_eof() {\n    printf(\"unterminated"
+    )
+    add_parser_file_test(
+        opencl.invalid.unterminated_string_at_eof
+        "${OPEN_SLEX_UNTERMINATED_STRING_EOF}"
+        1
+        "invalid string literal"
+    )
+
+    set(OPEN_SLEX_UNTERMINATED_COMMENT_EOF
+        "${OPEN_SLEX_GENERATED_TEST_DIR}/unterminated-comment-at-eof.cl"
+    )
+    file(WRITE "${OPEN_SLEX_UNTERMINATED_COMMENT_EOF}"
+        "__kernel void comment_at_eof() {}\n/* unterminated"
+    )
+    add_parser_file_test(
+        opencl.invalid.unterminated_comment_at_eof
+        "${OPEN_SLEX_UNTERMINATED_COMMENT_EOF}"
+        1
+        "unterminated block comment"
+    )
 
     add_test(
         NAME cli.missing_argument
@@ -163,6 +242,15 @@ if(BUILD_TESTING)
         opencl.valid.image_filtering
         opencl.valid.mandelbrot
         opencl.valid.matrix_multiplication
+        opencl.valid.strings
+        opencl.valid.line_comment_at_eof
         PROPERTIES LABELS "opencl;valid"
+    )
+    set_tests_properties(
+        opencl.invalid.string_escape
+        opencl.invalid.string_newline
+        opencl.invalid.unterminated_string_at_eof
+        opencl.invalid.unterminated_comment_at_eof
+        PROPERTIES LABELS "opencl;invalid"
     )
 endif()

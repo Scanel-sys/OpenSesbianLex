@@ -12,6 +12,7 @@
 
 
 %x STR
+%x STR_RECOVERY
 %x ML_COMMENT
 
 DIGIT                           [0-9]
@@ -30,11 +31,11 @@ MALFORMED_FLOAT                 ({MALFORMED_DECIMAL_EXPONENT}|{MALFORMED_HEXADEC
 
 %%
 
-[/][/].*\n      {
-                  BeginToken(yytext);
-                } // comment
+<INITIAL>"//"[^\r\n]* {
+                    BeginToken(yytext);
+                  }
 <INITIAL>"/*"     {
-                    BeginToken(yytext); 
+                    BeginToken(yytext);
                     BEGIN(ML_COMMENT);
                   }
 <ML_COMMENT>"*/"  {                
@@ -45,8 +46,13 @@ MALFORMED_FLOAT                 ({MALFORMED_DECIMAL_EXPONENT}|{MALFORMED_HEXADEC
 <ML_COMMENT>"\n"  {                
                     BeginToken(yytext); 
                   }
-<ML_COMMENT>.     {                
-                    BeginToken(yytext); 
+<ML_COMMENT>.     {
+                    BeginToken(yytext);
+                  }
+<ML_COMMENT><<EOF>> {
+                    BeginToken(yytext);
+                    BEGIN(INITIAL);
+                    return INVALID_COMMENT;
                   }
 if              { BeginToken(yytext); return IF; }
 include         { BeginToken(yytext); return INCLUDE; }
@@ -106,39 +112,90 @@ __kernel        { BeginToken(yytext); return KERNEL; }
                   return DIGIT;
                 }
                 
-["]             { 
-                  BeginToken(yytext);
-                  yylval = (int)*""; 
-                  BEGIN(STR); 
-                }
-
-<STR>["]        { 
-                  BeginToken(yytext);
-                  BEGIN(INITIAL); 
-                  return STRING; 
+<INITIAL>["]     {
+                    BeginToken(yytext);
+                    BEGIN(STR);
                   }
 
-<STR>[^\\\n"]+  {
-                  BeginToken(yytext);
-                  yylval += (int)*yytext;
-}
+<STR>["]         {
+                    BeginToken(yytext);
+                    BEGIN(INITIAL);
+                    return STRING;
+                  }
 
-<STR>\\n        {
-                  BeginToken(yytext);
-                  yylval += '\n';
-}
-<STR>\\["]      {
-                  BeginToken(yytext);
-                  yylval += '"';
-}
+<STR>[^\\\r\n"]+ {
+                    BeginToken(yytext);
+                  }
 
-<STR>\\         {
-                  BeginToken(yytext);
-                }
+<STR>\\\r?\n     {
+                    BeginToken(yytext);
+                  }
 
-<STR>\n         {
-                  BeginToken(yytext);
-                }
+<STR>\\[0-7]{1,3} {
+                    BeginToken(yytext);
+                  }
+
+<STR>\\x{HEX_DIGIT}+ {
+                    BeginToken(yytext);
+                  }
+
+<STR>\\u{HEX_DIGIT}{4} {
+                    BeginToken(yytext);
+                  }
+
+<STR>\\U{HEX_DIGIT}{8} {
+                    BeginToken(yytext);
+                  }
+
+<STR>\\.         {
+                    BeginToken(yytext);
+                    switch (yytext[1]) {
+                      case '\'': case '"': case '?': case '\\':
+                      case 'a': case 'b': case 'f': case 'n':
+                      case 'r': case 't': case 'v':
+                        break;
+                      default:
+                        BEGIN(STR_RECOVERY);
+                        return INVALID_STRING;
+                    }
+                  }
+
+<STR>\\          {
+                    BeginToken(yytext);
+                    BEGIN(STR_RECOVERY);
+                    return INVALID_STRING;
+                  }
+
+<STR>\r?\n       {
+                    BeginToken(yytext);
+                    BEGIN(INITIAL);
+                    return INVALID_STRING;
+                  }
+
+<STR><<EOF>>      {
+                    BeginToken(yytext);
+                    BEGIN(INITIAL);
+                    return INVALID_STRING;
+                  }
+
+<STR_RECOVERY>[^"\r\n]+ {
+                    BeginToken(yytext);
+                  }
+
+<STR_RECOVERY>["] {
+                    BeginToken(yytext);
+                    BEGIN(INITIAL);
+                  }
+
+<STR_RECOVERY>\r?\n {
+                    BeginToken(yytext);
+                    BEGIN(INITIAL);
+                  }
+
+<STR_RECOVERY><<EOF>> {
+                    BEGIN(INITIAL);
+                    return 0;
+                  }
 
 [ \t\r\n]       BeginToken(yytext); // whitespace
 

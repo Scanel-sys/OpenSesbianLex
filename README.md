@@ -113,3 +113,14 @@ example `0x1.fp3`, `0x1p0f`, or `0x1.ffcp15h`.
 
 A standalone `.`, an exponent without digits such as `1e+`, and a hexadecimal
 fraction without a complete `p`/`P` exponent are rejected.
+
+## Strings and comments
+
+String literals accept the C99/OpenCL simple escapes, octal and hexadecimal
+escapes, `\u`/`\U` universal character names, and backslash-newline line
+continuations. Unknown escapes, unescaped newlines, and EOF before the closing
+quote are reported as `invalid string literal`.
+
+Both `//` and `/* ... */` comments are supported. A `//` comment may end at
+EOF without a final newline; an unclosed block comment is reported as
+`unterminated block comment`.

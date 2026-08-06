@@ -39,6 +39,8 @@
 %token UNSIGNED LONG SHORT
 %token FLOAT_NUM
 %token INVALID_FLOAT "invalid floating-point literal"
+%token INVALID_STRING "invalid string literal"
+%token INVALID_COMMENT "unterminated block comment"
 %token '.'
 %%
 
