@@ -1,8 +1,7 @@
 %locations
+%error-verbose
 %{
     #include "TextHandler.hpp"
-
-    #define YYERROR_VERBOSE 1
 
     extern int yylineno;
     extern char * yytext;
