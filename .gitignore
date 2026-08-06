@@ -8,3 +8,8 @@ src/lex.yy.c
 src/OpenSLex.exe
 
 build
+CMakeFiles/
+CMakeCache.txt
+CTestTestfile.cmake
+cmake_install.cmake
+Testing/
