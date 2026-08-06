@@ -1,235 +1,241 @@
 #include "TextHandler.hpp"
 
-#define true 1
-#define false 0
-#define PREAMBULA_SIZE 7
-/*
- * global variable
- */
+#include <algorithm>
+#include <cctype>
+#include <cstddef>
+#include <cstring>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <string>
+
 int debug = 0;
 
-/*
-    local vars
-*/
-static FILE *file;
-static int eof = 0;
-static int nRow = 0;
-static int nBuffer = 0;
-static int lBuffer = 0;
-static int nTokenStart = 0;
-static int nTokenLength = 0;
-static int nTokenNextStart = 0;
-static int lMaxBuffer = 1000;
-static char *buffer;
 extern int yylineno;
-int err = false;
 
-static int getNextLine(void);
+namespace
+{
+enum class ExitCode
+{
+    Success = 0,
+    SyntaxError = 1,
+    UsageError = 2,
+    InputError = 3,
+};
 
-/*--------------------------------------------------------------------
- * dumpChar
- * 
- * printable version of a char
- *------------------------------------------------------------------*/
-static
-char dumpChar(char c) {
-    if (  isprint(c)  )
-        return c;
-    return '@';
+enum class ReadLineResult
+{
+    Line,
+    EndOfFile,
+    Error,
+};
+
+std::ifstream inputFile;
+std::string lineBuffer;
+
+bool endOfFile = false;
+bool inputReadError = false;
+bool syntaxError = false;
+
+int currentRow = 0;
+std::size_t bufferOffset = 0;
+std::size_t tokenStart = 0;
+std::size_t tokenLength = 0;
+std::size_t nextTokenStart = 0;
+
+ReadLineResult getNextLine();
+
+char dumpChar(char character)
+{
+    const auto value = static_cast<unsigned char>(character);
+    return std::isprint(value) != 0 ? character : '@';
 }
 
-/*--------------------------------------------------------------------
- * dumpString
- * 
- * printable version of a string upto 100 character
- *------------------------------------------------------------------*/
-static
-char *dumpString(char *s) {
-    static char buf[101];
-    int i;
-    int n = strlen(s);
+std::string dumpString(const char* text)
+{
+    constexpr std::size_t maxLength = 100;
+    const std::size_t length = std::min(std::strlen(text), maxLength);
 
-    if (  n > 100  )
-        n = 100;
-
-    for (i=0; i<n; i++)
-        buf[i] = dumpChar(s[i]);
-    buf[i] = 0;
-    return buf;
-}
-
-void PrintError(const char *errorstring, ...) {
-    err = true;
-    static char errmsg[10000];
-    va_list args;
-
-    int start = nTokenStart;
-    int end=start + nTokenLength - 1;
-    int i;
-
-  /*================================================================*/
-  /* a bit more complicate version ---------------------------------*/
-/* */
-    if (  eof  ) {
-        fprintf(stdout, "...... !");
-        for (i=0; i<lBuffer; i++)
-        fprintf(stdout, ".");
-        fprintf(stdout, "^-EOF\n");
+    std::string result;
+    result.reserve(length);
+    for (std::size_t index = 0; index < length; ++index)
+    {
+        result.push_back(dumpChar(text[index]));
     }
-    else {
-        fprintf(stdout, "...... !");
-        if(start != 1)
+    return result;
+}
+
+int toLocationValue(std::size_t value)
+{
+    const auto maxValue = static_cast<std::size_t>(std::numeric_limits<int>::max());
+    return value > maxValue ? std::numeric_limits<int>::max()
+                            : static_cast<int>(value);
+}
+
+ReadLineResult getNextLine()
+{
+    bufferOffset = 0;
+    tokenStart = 0;
+    nextTokenStart = 1;
+    endOfFile = false;
+    lineBuffer.clear();
+
+    if (std::getline(inputFile, lineBuffer))
+    {
+        // std::getline removes the delimiter. Restore it so Flex sees the
+        // same input stream as it did with fgets, except for a final line
+        // that genuinely has no newline.
+        if (!inputFile.eof())
         {
-            for (i=0; i<start; i++)
-            fprintf(stdout, ".");
-        }
-        for (i=start; i<=end; i++)
-        fprintf(stdout, "^");
-        
-        fprintf(stdout, "\n");
-    }
-/* */
-
-    /*================================================================*/
-    /* print it using variable arguments -----------------------------*/
-    va_start(args, errorstring);
-    vsprintf(errmsg, errorstring, args);
-    va_end(args);
-
-    fprintf(stdout, "Error: %s at line %d\n", errmsg, yylineno);
-    
-    for (i = 1; i < 71; i++)
-        fprintf(stdout, " "); 
-    fprintf(stdout, "\n"); 
-}
-
-/*--------------------------------------------------------------------
- * DumpRow
- * 
- * dumps the contents of the current row
- *------------------------------------------------------------------*/
-void DumpRow(void) {
-        if(!err)
-    {
-        fprintf(stderr, "\nError(s) occured while parsing:\n\n");
-    }
-    
-    fprintf(stdout, "%6d |%.*s", nRow, lBuffer, buffer);
-}
-
-void BeginToken(char *t) 
-{
-    /*================================================================*/
-    /* remember last read token --------------------------------------*/
-    nTokenStart = nTokenNextStart;
-    nTokenLength = strlen(t);
-    nTokenNextStart = nBuffer; // + 1;
-
-    /*================================================================*/
-    /* location for bison --------------------------------------------*/
-    yylloc.first_line = nRow;
-    yylloc.first_column = nTokenStart;
-    yylloc.last_line = nRow;
-    yylloc.last_column = nTokenStart + nTokenLength - 1;
-
-    if (  debug  ) {
-        printf("Token '%s' at %d:%d next at %d\n", dumpString(t),
-                            yylloc.first_column,
-                            yylloc.last_column, nTokenNextStart);
-    }
-}
-
-/*--------------------------------------------------------------------
-* GetNextChar
-* 
-* reads a character from input for flex
-*------------------------------------------------------------------*/
-int GetNextChar(char *b, int maxBuffer) 
-{
-    int frc;
-
-    /*================================================================*/
-    /*----------------------------------------------------------------*/
-    if (  eof  )
-        return 0;
-
-    /*================================================================*/
-    /* read next line if at the end of the current -------------------*/
-    while (  nBuffer >= lBuffer  ) {
-        frc = getNextLine();
-        if (  frc != 0  )
-        return 0;
+            lineBuffer.push_back('\n');
         }
 
-    /*================================================================*/
-    /* ok, return character ------------------------------------------*/
-    b[0] = buffer[nBuffer];
-    nBuffer += 1;
-
-    if (  debug  )
-        printf("GetNextChar() => '%c'0x%02x at %d\n",
-                            dumpChar(b[0]), b[0], nBuffer);
-    return b[0]==0?0:1;
-}
-
-/*--------------------------------------------------------------------
- * getNextLine
- * 
- * reads a line into the buffer
- *------------------------------------------------------------------*/
-static
-int getNextLine(void) {
-    int i;
-    char *p;
-    
-    /*================================================================*/
-    /*----------------------------------------------------------------*/
-    nBuffer = 0;
-    nTokenStart = -1;
-    nTokenNextStart = 1;
-    eof = false;
-
-    /*================================================================*/
-    /* read a line ---------------------------------------------------*/
-    p = fgets(buffer, lMaxBuffer, file);
-    if (  p == NULL  ) {
-        if (  ferror(file)  )
-            return -1;
-        eof = true;
-        return 1;
+        ++currentRow;
+        return ReadLineResult::Line;
     }
 
-    nRow += 1;
-    lBuffer = strlen(buffer);
-    //DumpRow();                    // print all file lines
-
-    /*================================================================*/
-    /* that's it -----------------------------------------------------*/
-    return 0;
-}
-
-
-int main(int argc, char *argv[])
-{
-    char *infile = argv[1];
-    file = fopen(infile, "r");
-    buffer = (char*)malloc(lMaxBuffer);
-    if (  buffer == NULL  ) {
-        printf("cannot allocate %d bytes of memory\n", lMaxBuffer);
-        fclose(file);
-        return 1;
-    }
-    
-    if (  getNextLine() == 0  )
-        yyparse();
-    
-    free(buffer);
-    fclose(file);
-
-    if(!err)
+    if (inputFile.bad() || !inputFile.eof())
     {
-        printf("PASS\n");
+        inputReadError = true;
+        return ReadLineResult::Error;
     }
 
-    return err;
+    endOfFile = true;
+    return ReadLineResult::EndOfFile;
+}
+} // namespace
+
+void PrintError(const char* message)
+{
+    syntaxError = true;
+    const std::size_t markerLength = std::max<std::size_t>(tokenLength, 1);
+
+    std::cerr << "...... !";
+    if (endOfFile)
+    {
+        std::cerr << std::string(lineBuffer.size(), '.') << "^-EOF\n";
+    }
+    else
+    {
+        if (tokenStart != 1)
+        {
+            std::cerr << std::string(tokenStart, '.');
+        }
+        std::cerr << std::string(markerLength, '^') << '\n';
+    }
+
+    std::cerr << "Error: " << (message != nullptr ? message : "syntax error")
+              << " at line " << yylineno << "\n\n";
+}
+
+void DumpRow()
+{
+    if (!syntaxError)
+    {
+        std::cerr << "\nError(s) occurred while parsing:\n\n";
+    }
+
+    std::cerr << std::setw(6) << currentRow << " |" << lineBuffer;
+    if (lineBuffer.empty() || lineBuffer.back() != '\n')
+    {
+        std::cerr << '\n';
+    }
+}
+
+void BeginToken(const char* token)
+{
+    if (token == nullptr)
+    {
+        return;
+    }
+
+    tokenStart = nextTokenStart;
+    tokenLength = std::strlen(token);
+    nextTokenStart = bufferOffset;
+
+    yylloc.first_line = currentRow;
+    yylloc.first_column = toLocationValue(tokenStart);
+    yylloc.last_line = currentRow;
+    yylloc.last_column = toLocationValue(
+        tokenStart + (tokenLength == 0 ? 0 : tokenLength - 1));
+
+    if (debug != 0)
+    {
+        std::cout << "Token '" << dumpString(token) << "' at "
+                  << yylloc.first_column << ':' << yylloc.last_column
+                  << " next at " << nextTokenStart << '\n';
+    }
+}
+
+int GetNextChar(char* destination, int maxBuffer)
+{
+    if (destination == nullptr || maxBuffer <= 0 || endOfFile)
+    {
+        return 0;
+    }
+
+    while (bufferOffset >= lineBuffer.size())
+    {
+        if (getNextLine() != ReadLineResult::Line)
+        {
+            return 0;
+        }
+    }
+
+    destination[0] = lineBuffer[bufferOffset++];
+
+    if (debug != 0)
+    {
+        const auto byteValue = static_cast<unsigned int>(
+            static_cast<unsigned char>(destination[0]));
+        std::cout << "GetNextChar() => '" << dumpChar(destination[0])
+                  << "' 0x" << std::hex << byteValue << std::dec
+                  << " at " << bufferOffset << '\n';
+    }
+
+    return destination[0] == '\0' ? 0 : 1;
+}
+
+int main(int argc, char* argv[])
+{
+    if (argc != 2)
+    {
+        const char* programName = argc > 0 && argv[0] != nullptr
+                                      ? argv[0]
+                                      : "OpenSLex";
+        std::cerr << "Usage: " << programName << " <input-file>\n";
+        return static_cast<int>(ExitCode::UsageError);
+    }
+
+    const char* inputPath = argv[1];
+    inputFile.open(inputPath);
+    if (!inputFile.is_open())
+    {
+        std::cerr << "Error: cannot open input file '" << inputPath << "'.\n";
+        return static_cast<int>(ExitCode::InputError);
+    }
+
+    const ReadLineResult firstLine = getNextLine();
+    if (firstLine == ReadLineResult::Line)
+    {
+        if (yyparse() != 0)
+        {
+            syntaxError = true;
+        }
+    }
+
+    if (firstLine == ReadLineResult::Error || inputReadError)
+    {
+        std::cerr << "Error: failed to read input file '" << inputPath << "'.\n";
+        return static_cast<int>(ExitCode::InputError);
+    }
+
+    if (syntaxError)
+    {
+        return static_cast<int>(ExitCode::SyntaxError);
+    }
+
+    std::cout << "PASS\n";
+    return static_cast<int>(ExitCode::Success);
 }

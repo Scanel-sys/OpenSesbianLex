@@ -105,6 +105,34 @@ if(BUILD_TESTING)
     add_parser_test(opencl.valid.mandelbrot docs/cl_examples/mandelbrot.cl 0)
     add_parser_test(opencl.valid.matrix_multiplication docs/cl_examples/matrix_multiplication.cl 0)
 
+    add_test(
+        NAME cli.missing_argument
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-DPARSER=$<TARGET_FILE:OpenSLex>"
+            -DEXPECTED_EXIT_CODE=2
+            -DEXPECTED_STDERR_PATTERN=Usage:
+            -DEXPECT_STDOUT_EMPTY=ON
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunParserTest.cmake"
+    )
+    add_test(
+        NAME cli.missing_file
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-DPARSER=$<TARGET_FILE:OpenSLex>"
+            "-DINPUT=${CMAKE_CURRENT_BINARY_DIR}/__open_slex_missing_input__.c"
+            -DINPUT_MUST_EXIST=OFF
+            -DEXPECTED_EXIT_CODE=3
+            "-DEXPECTED_STDERR_PATTERN=cannot open input file"
+            -DEXPECT_STDOUT_EMPTY=ON
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunParserTest.cmake"
+    )
+    set_tests_properties(
+        cli.missing_argument
+        cli.missing_file
+        PROPERTIES LABELS "cli;invalid" TIMEOUT 10
+    )
+
     set_tests_properties(
         c.valid.array
         c.valid.directives

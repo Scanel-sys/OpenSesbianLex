@@ -1,26 +1,20 @@
-#define YYLTYPE_IS_DECLARED
+#pragma once
+
+#define YYLTYPE_IS_DECLARED 1
 typedef struct YYLTYPE
 {
-  int first_line;
-  int first_column;
-  int last_line;
-  int last_column;
+    int first_line;
+    int first_column;
+    int last_line;
+    int last_column;
 } YYLTYPE;
 
-#include <stdio.h>
-#include <math.h>
-#include <ctype.h>
-#include <string.h>
-#include <memory.h>
-#include <stdlib.h>
-#include <stdarg.h>
-#include <float.h>
 #include "SLexParser.tab.hpp"
 
-extern int yyparse(void);
-extern void yyerror(char*);
+int yyparse();
+void yyerror(const char* message);
 
-void DumpRow(void);
-int GetNextChar(char *b, int maxBuffer);
-void BeginToken(char*);
-void PrintError(const char *s, ...);
+void DumpRow();
+int GetNextChar(char* destination, int maxBuffer);
+void BeginToken(const char* token);
+void PrintError(const char* message);

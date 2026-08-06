@@ -96,3 +96,10 @@ ctest --test-dir build --output-on-failure
 
 For a Visual Studio Release build on Windows use
 `./build/Release/OpenSLex.exe` instead.
+
+## Exit codes
+
+- `0` — parsing succeeded
+- `1` — the input contains a syntax error
+- `2` — invalid command-line usage, such as a missing input path
+- `3` — the input file could not be opened or read
