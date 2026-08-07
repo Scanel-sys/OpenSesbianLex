@@ -89,9 +89,15 @@ program and its obfuscated version, then compares their results:
 ctest --test-dir build --output-on-failure
 ```
 
-The Linux GitHub Actions job additionally installs the PoCL CPU runtime and
-runs both the original and obfuscated OpenCL kernels with the same input. It
-checks that both kernels build successfully and produce identical results.
+The Linux GitHub Actions jobs run the OpenCL tests on two independent
+implementations: the PoCL CPU runtime and the Oclgrind OpenCL simulator. The
+semantic fixture covers vector swizzles, structures and `ptr->field`, macros
+and conditional compilation, nested scopes, loops, local memory, `barrier`,
+and `CLK_LOCAL_MEM_FENCE`. The jobs execute the original and obfuscated
+kernels with the same input and compare their results. They also ask the
+OpenCL compiler to build both forms of every valid `.cl` example in
+`docs/cl_examples`.
+
 To enable this test locally on a system with an OpenCL SDK and runtime:
 
 ```sh
@@ -99,6 +105,35 @@ cmake -S . -B build -DOPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+To execute the same tests through Oclgrind:
+
+```sh
+cmake -S . -B build \
+  -DOPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS=ON \
+  -DOPEN_SLEX_OPENCL_RUNTIME_LAUNCHER=oclgrind
+cmake --build build
+ctest --test-dir build --output-on-failure
+```
+
+### Test in Docker
+
+The Docker image uses Ubuntu 24.04 and runs the tests while the image is being
+built. No GPU passthrough is required. Build the PoCL target with:
+
+```sh
+docker build --progress=plain --target test-pocl -t openslex-test-pocl .
+```
+
+Run the same suite through Oclgrind with:
+
+```sh
+docker build --progress=plain --target test-oclgrind -t openslex-test-oclgrind .
+```
+
+The default target is PoCL, so `docker build .` also runs the PoCL suite. A
+failed CMake build or CTest test makes `docker build` return a nonzero exit
+code.
 
 ## Run
 

@@ -1,0 +1,7 @@
+.git
+build
+build-*
+cmake-build-*
+obfuscated_result.cl
+*.suo
+*.user
