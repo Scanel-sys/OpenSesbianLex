@@ -54,9 +54,9 @@ if(NOT local_name_position EQUAL -1)
 endif()
 
 string(REGEX REPLACE "[ \t\r\n]" "" compact_source "${obfuscated_source}")
-string(FIND "${compact_source}" "if(!(" dead_branch_position)
-if(dead_branch_position EQUAL -1)
-    message(FATAL_ERROR "The unreachable transformed if block was not inserted")
+if(NOT compact_source MATCHES
+   "if[(][(][(]0x[0-9a-f]+u[*][(]0x[0-9a-f]+u[+]1u[)][)][&]1u[)]!=0u[)]")
+    message(FATAL_ERROR "The safe opaque-false branch was not inserted")
 endif()
 
 string(FIND "${obfuscated_source}" "<:" digraph_position)

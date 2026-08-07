@@ -161,9 +161,10 @@ unresolved OpenCL built-ins are preserved. Vector selectors such as `.xy` and
 `.s0` are preserved only when the base expression has a vector type, so an
 ordinary variable named `x` is still obfuscated.
 
-The output pass also removes selected whitespace and comments, inserts an
-unreachable transformed block into braced `if` statements, and replaces
-supported punctuators with C digraphs or trigraphs.
+The output pass also removes selected whitespace and comments, inserts a
+side-effect-free opaque-false branch into braced `if` statements, and replaces
+supported punctuators with C digraphs or trigraphs. The opaque predicate uses
+only unsigned arithmetic and never evaluates the original condition again.
 
 ## Exit codes
 

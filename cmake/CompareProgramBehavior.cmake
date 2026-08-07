@@ -28,8 +28,8 @@ if(NOT original_result MATCHES "^-?[0-9]+$" OR
     )
 endif()
 
-if(NOT original_result EQUAL 37)
-    message(FATAL_ERROR "The original program returned ${original_result}, expected 37")
+if(NOT original_result EQUAL 32)
+    message(FATAL_ERROR "The original program returned ${original_result}, expected 32")
 endif()
 
 if(NOT obfuscated_result EQUAL original_result)

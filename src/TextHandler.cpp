@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstddef>
+#include <cstdint>
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
@@ -104,47 +105,14 @@ public:
         sourceTokens_.push_back({tokenText, isIdentifier});
         const ObfuscationToken obfuscationToken{
             tokenText, isIdentifier, sourceIndex};
-        bool firstExpressionParsing = false;
 
         if (if_processing != 0)
         {
             tempTokens_.push_back(obfuscationToken);
-            expressionTokens_.push_back(obfuscationToken);
-
-            if (ifExpressionStart_ == 0 && tokenText == "(")
-            {
-                ifExpressionStart_ = tempTokens_.size();
-                ifExpressionParenthesisDepth_ = 1;
-            }
-            else if (ifExpressionStart_ != 0 && ifExpressionEnd_ == 0)
-            {
-                if (tokenText == "(")
-                {
-                    ++ifExpressionParenthesisDepth_;
-                }
-                else if (tokenText == ")" &&
-                         ifExpressionParenthesisDepth_ > 0)
-                {
-                    --ifExpressionParenthesisDepth_;
-                    if (ifExpressionParenthesisDepth_ == 0)
-                    {
-                        ifExpressionEnd_ = tempTokens_.size() - 1;
-                    }
-                }
-            }
 
             if (ifBodyStart_ == 0 && tokenText == "{")
             {
                 ifBodyStart_ = tempTokens_.size();
-            }
-
-            firstExpressionParsing =
-                tempTokens_.size() != ifExpressionStart_ &&
-                ifExpressionStart_ != 0 && ifExpressionEnd_ == 0;
-
-            if (firstExpressionParsing)
-            {
-                firstExpressionTokens_.push_back(obfuscationToken);
             }
 
             if (tokenText == "{")
@@ -164,18 +132,13 @@ public:
                 tempTokens_.size() - ifBodyStart_ - 1);
 
             appendTokens(outputTokens_, tempTokens_, 0, ifBodyStart_);
-            makeDeadEnd();
+            insertOpaqueFalseBranch();
             appendTokens(outputTokens_, bodyTokens_, 0, bodyTokens_.size());
             pushOutputToken("}");
 
             tempTokens_.clear();
-            expressionTokens_.clear();
             bodyTokens_.clear();
-            firstExpressionTokens_.clear();
-            ifExpressionStart_ = 0;
-            ifExpressionEnd_ = 0;
             ifBodyStart_ = 0;
-            ifExpressionParenthesisDepth_ = 0;
         }
         else if (tempTokens_.empty())
         {
@@ -203,8 +166,6 @@ public:
     }
 
 private:
-    std::vector<ObfuscationToken> firstExpressionTokens_;
-    std::vector<ObfuscationToken> expressionTokens_;
     std::vector<ObfuscationToken> tempTokens_;
     std::vector<ObfuscationToken> bodyTokens_;
     std::vector<ObfuscationToken> outputTokens_;
@@ -212,9 +173,7 @@ private:
     BracesQueue braces_;
 
     std::size_t ifBodyStart_ = 0;
-    std::size_t ifExpressionStart_ = 0;
-    std::size_t ifExpressionEnd_ = 0;
-    std::size_t ifExpressionParenthesisDepth_ = 0;
+    std::uint32_t opaquePredicateIndex_ = 0;
 
     static bool isIdentifierCharacter(char character)
     {
@@ -253,80 +212,54 @@ private:
             {text, false, std::numeric_limits<std::size_t>::max()});
     }
 
-    void makeDeadEnd()
+    static std::string unsignedLiteral(std::uint32_t value)
     {
-        appendTokens(outputTokens_, tempTokens_, 0, ifExpressionStart_);
-        pushOutputToken("!(");
-        appendTokens(
-            outputTokens_, firstExpressionTokens_, 0,
-            firstExpressionTokens_.size());
-        pushOutputToken("))");
-        pushOutputToken("{");
-        obfuscateFullBlock();
-        pushOutputToken("}");
+        std::ostringstream stream;
+        stream << "0x" << std::hex << value << 'u';
+        return stream.str();
     }
 
-    void obfuscateFullBlock()
+    void insertOpaqueFalseBranch()
     {
-        for (const ObfuscationToken& token : expressionTokens_)
-        {
-            if (token.text == "||")
-            {
-                pushOutputToken("&&");
-            }
-            else if (token.text == "&&")
-            {
-                pushOutputToken("||");
-            }
-            else if (token.text == "|")
-            {
-                pushOutputToken("^");
-            }
-            else if (token.text == "&")
-            {
-                pushOutputToken("|");
-            }
-            else if (token.text == "+")
-            {
-                pushOutputToken("*");
-            }
-            else if (token.text == "-")
-            {
-                pushOutputToken("+");
-            }
-            else if (token.text == "%")
-            {
-                pushOutputToken("/");
-            }
-            else if (token.text == ">=")
-            {
-                pushOutputToken("<");
-            }
-            else if (token.text == "<=")
-            {
-                pushOutputToken(">");
-            }
-            else if (token.text == "<")
-            {
-                pushOutputToken(">=");
-            }
-            else if (token.text == ">")
-            {
-                pushOutputToken("<=");
-            }
-            else if (token.text == "++")
-            {
-                pushOutputToken("--");
-            }
-            else if (token.text == "--")
-            {
-                pushOutputToken("++");
-            }
-            else
-            {
-                outputTokens_.push_back(token);
-            }
-        }
+        // n * (n + 1) is even for every unsigned n, including after modular
+        // overflow. The predicate is therefore always false and does not read
+        // or evaluate anything from the user's original condition.
+        const std::uint32_t seed =
+            0x9e3779b9u ^ (opaquePredicateIndex_ * 0x85ebca6bu);
+        const std::uint32_t payloadLeft = seed ^ 0xa5a5a5a5u;
+        const std::uint32_t payloadRight = seed ^ 0x5a5a5a5au;
+        ++opaquePredicateIndex_;
+
+        const std::string seedLiteral = unsignedLiteral(seed);
+        pushOutputToken("if");
+        pushOutputToken("(");
+        pushOutputToken("(");
+        pushOutputToken("(");
+        pushOutputToken(seedLiteral);
+        pushOutputToken("*");
+        pushOutputToken("(");
+        pushOutputToken(seedLiteral);
+        pushOutputToken("+");
+        pushOutputToken("1u");
+        pushOutputToken(")");
+        pushOutputToken(")");
+        pushOutputToken("&");
+        pushOutputToken("1u");
+        pushOutputToken(")");
+        pushOutputToken("!=");
+        pushOutputToken("0u");
+        pushOutputToken(")");
+        pushOutputToken("{");
+        pushOutputToken("(");
+        pushOutputToken("void");
+        pushOutputToken(")");
+        pushOutputToken("(");
+        pushOutputToken(unsignedLiteral(payloadLeft));
+        pushOutputToken("^");
+        pushOutputToken(unsignedLiteral(payloadRight));
+        pushOutputToken(")");
+        pushOutputToken(";");
+        pushOutputToken("}");
     }
 
     void obfuscateIdentifiers()
