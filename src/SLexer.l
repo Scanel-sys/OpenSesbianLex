@@ -41,12 +41,18 @@ MALFORMED_FLOAT                 ({MALFORMED_DECIMAL_EXPONENT}|{MALFORMED_HEXADEC
                     /* Line comments are intentionally omitted from output. */
                   }
 <INITIAL>"/*"     {
+                    /* A C comment is replaced by whitespace so adjacent
+                       tokens cannot merge after obfuscation. */
+                    BeginToken(" ");
                     BEGIN(ML_COMMENT);
                   }
 <ML_COMMENT>"*/"  {
                     BEGIN(INITIAL);
                   }
-<ML_COMMENT>"\n"  {
+<ML_COMMENT>\r?\n   {
+                    /* Keep source line boundaries for directives,
+                       diagnostics, and following tokens. */
+                    BeginToken(yytext);
                   }
 <ML_COMMENT>.     {
                   }
