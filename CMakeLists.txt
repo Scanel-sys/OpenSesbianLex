@@ -57,6 +57,8 @@ ADD_FLEX_BISON_DEPENDENCY(OpenSLexLexer OpenSLexParser)
 
 add_executable(
     OpenSLex
+    src/AtomicFileWriter.cpp
+    src/AtomicFileWriter.hpp
     src/TextHandler.cpp
     src/TextHandler.hpp
     ${BISON_OpenSLexParser_OUTPUTS}
@@ -415,9 +417,18 @@ if(BUILD_TESTING)
             -DEXPECT_STDOUT_EMPTY=ON
             -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunParserTest.cmake"
     )
+    add_test(
+        NAME cli.safe_output
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-DPARSER=$<TARGET_FILE:OpenSLex>"
+            "-DWORK_DIR=${OPEN_SLEX_GENERATED_TEST_DIR}/safe-output"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunSafeOutputTest.cmake"
+    )
     set_tests_properties(
         cli.missing_argument
         cli.missing_file
+        cli.safe_output
         PROPERTIES LABELS "cli;invalid" TIMEOUT 10
     )
 

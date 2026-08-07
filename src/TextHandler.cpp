@@ -1,4 +1,5 @@
 #include "TextHandler.hpp"
+#include "AtomicFileWriter.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -12,6 +13,7 @@
 #include <map>
 #include <ostream>
 #include <set>
+#include <sstream>
 #include <string>
 #include <vector>
 
@@ -639,13 +641,6 @@ int main(int argc, char* argv[])
         return static_cast<int>(ExitCode::InputError);
     }
 
-    std::ofstream outputFile(outputPath, std::ios::out | std::ios::trunc);
-    if (!outputFile.is_open())
-    {
-        std::cerr << "Error: cannot open output file '" << outputPath << "'.\n";
-        return static_cast<int>(ExitCode::InputError);
-    }
-
     const ReadLineResult firstLine = getNextLine();
     if (firstLine == ReadLineResult::Line)
     {
@@ -666,9 +661,21 @@ int main(int argc, char* argv[])
         return static_cast<int>(ExitCode::SyntaxError);
     }
 
-    if (!obfuscator.writeResult(outputFile))
+    inputFile.close();
+
+    std::ostringstream outputBuffer;
+    if (!obfuscator.writeResult(outputBuffer))
     {
-        std::cerr << "Error: failed to write output file '" << outputPath << "'.\n";
+        std::cerr << "Error: failed to prepare output file '" << outputPath
+                  << "'.\n";
+        return static_cast<int>(ExitCode::InputError);
+    }
+
+    std::string outputError;
+    if (!WriteFileAtomically(outputPath, outputBuffer.str(), outputError))
+    {
+        std::cerr << "Error: failed to write output file '" << outputPath
+                  << "': " << outputError << ".\n";
         return static_cast<int>(ExitCode::InputError);
     }
 
