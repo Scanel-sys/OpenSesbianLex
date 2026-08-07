@@ -76,6 +76,7 @@ void language_coverage(
     output[3] = (int)sizeof(Particle) + (int)letter + lanes.s0;
 
 #ifdef cl_khr_fp16
+    #pragma OPENCL EXTENSION cl_khr_fp16 : enable
     half half_value = (half)1.0h;
     output[4] = (int)half_value;
 #else

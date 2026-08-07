@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.20)
 project(OpenSesbianLex VERSION 1.0.0 LANGUAGES CXX)
 
 include(CTest)
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 option(
     OPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS
@@ -25,6 +26,41 @@ set(
     CACHE STRING
     "Optional command used to launch OpenCL runtime tests (for example oclgrind)"
 )
+set(
+    OPEN_SLEX_FRONTEND
+    "AUTO"
+    CACHE STRING
+    "Semantic frontend: AUTO, CLANG, or LEGACY"
+)
+set_property(
+    CACHE OPEN_SLEX_FRONTEND
+    PROPERTY STRINGS AUTO CLANG LEGACY
+)
+string(TOUPPER "${OPEN_SLEX_FRONTEND}" OPEN_SLEX_FRONTEND)
+if(NOT OPEN_SLEX_FRONTEND MATCHES "^(AUTO|CLANG|LEGACY)$")
+    message(FATAL_ERROR
+        "OPEN_SLEX_FRONTEND must be AUTO, CLANG, or LEGACY"
+    )
+endif()
+
+set(OPEN_SLEX_HAS_CLANG_FRONTEND OFF)
+if(NOT OPEN_SLEX_FRONTEND STREQUAL "LEGACY")
+    find_package(LibClang QUIET)
+    if(LibClang_FOUND)
+        set(OPEN_SLEX_HAS_CLANG_FRONTEND ON)
+        message(STATUS "OpenSLex semantic frontend: Clang/libclang")
+    elseif(OPEN_SLEX_FRONTEND STREQUAL "CLANG")
+        message(FATAL_ERROR
+            "OPEN_SLEX_FRONTEND=CLANG requires libclang and clang-c/Index.h"
+        )
+    else()
+        message(STATUS
+            "OpenSLex semantic frontend: legacy (libclang was not found)"
+        )
+    endif()
+else()
+    message(STATUS "OpenSLex semantic frontend: legacy (explicitly selected)")
+endif()
 
 # GNU tools are usually named bison/flex. WinFlexBison uses
 # win_bison/win_flex, so accept both without hard-coded install paths.
@@ -69,6 +105,8 @@ add_executable(
     OpenSLex
     src/AtomicFileWriter.cpp
     src/AtomicFileWriter.hpp
+    src/ClangFrontend.cpp
+    src/ClangFrontend.hpp
     src/IdentifierResolver.cpp
     src/IdentifierResolver.hpp
     src/TextHandler.cpp
@@ -77,13 +115,35 @@ add_executable(
     ${FLEX_OpenSLexLexer_OUTPUTS}
 )
 
-target_compile_features(OpenSLex PRIVATE cxx_std_11)
+target_compile_features(OpenSLex PRIVATE cxx_std_14)
 target_include_directories(
     OpenSLex
     PRIVATE
         "${CMAKE_CURRENT_SOURCE_DIR}/src"
         "${OPEN_SLEX_GENERATED_DIR}"
 )
+
+if(OPEN_SLEX_HAS_CLANG_FRONTEND)
+    target_compile_definitions(
+        OpenSLex
+        PRIVATE
+            OPEN_SLEX_HAS_CLANG_FRONTEND=1
+            "OPEN_SLEX_CLANG_RESOURCE_DIR=\"${LibClang_RESOURCE_DIR}\""
+    )
+    target_link_libraries(OpenSLex PRIVATE LibClang::LibClang)
+    if(WIN32 AND LibClang_RUNTIME_LIBRARY)
+        add_custom_command(
+            TARGET OpenSLex
+            POST_BUILD
+            COMMAND
+                "${CMAKE_COMMAND}" -E copy_if_different
+                "${LibClang_RUNTIME_LIBRARY}"
+                "$<TARGET_FILE_DIR:OpenSLex>"
+            COMMENT "Copying libclang runtime next to OpenSLex"
+            VERBATIM
+        )
+    endif()
+endif()
 
 function(open_slex_enable_sanitizers target_name)
     if(NOT OPEN_SLEX_ENABLE_SANITIZERS)
@@ -131,7 +191,7 @@ if(OPEN_SLEX_BUILD_FUZZER)
         ${BISON_OpenSLexParser_OUTPUTS}
         ${FLEX_OpenSLexLexer_OUTPUTS}
     )
-    target_compile_features(OpenSLexFuzzer PRIVATE cxx_std_11)
+    target_compile_features(OpenSLexFuzzer PRIVATE cxx_std_14)
     target_compile_definitions(OpenSLexFuzzer PRIVATE OPEN_SLEX_NO_MAIN=1)
     target_include_directories(
         OpenSLexFuzzer
@@ -264,29 +324,42 @@ if(BUILD_TESTING)
     add_parser_test(opencl.valid.comment_boundaries tests/opencl_comment_boundaries.cl 0)
     add_parser_test(opencl.valid.preprocessor tests/opencl_preprocessor.cl 0)
     add_parser_test(opencl.valid.language_coverage tests/opencl_language_coverage.cl 0)
+    if(OPEN_SLEX_HAS_CLANG_FRONTEND)
+        add_parser_test(
+            opencl.valid.clang_semantics
+            tests/opencl_clang_semantics.cl
+            0
+        )
+        add_parser_test(
+            opencl.invalid.clang_undeclared_identifier
+            tests/FALSE_opencl_undeclared_identifier.cl
+            1
+            "undeclared identifier"
+        )
+    endif()
     add_parser_test(
         opencl.invalid.preprocessor_unmatched
         tests/FALSE_preprocessor_unmatched.cl
         1
-        "syntax error"
+        "(syntax error|#else without #if)"
     )
     add_parser_test(
         opencl.invalid.preprocessor_unterminated
         tests/FALSE_preprocessor_unterminated.cl
         1
-        "syntax error"
+        "(syntax error|unterminated conditional directive)"
     )
     add_parser_test(
         opencl.invalid.string_escape
         docs/cl_examples/FALSE_string_escape.cl
         1
-        "invalid string literal"
+        "(invalid string literal|unknown escape sequence)"
     )
     add_parser_test(
         opencl.invalid.string_newline
         docs/cl_examples/FALSE_string_newline.cl
         1
-        "invalid string literal"
+        "(invalid string literal|expected expression|missing terminating)"
     )
 
     set(OPEN_SLEX_GENERATED_TEST_DIR "${CMAKE_CURRENT_BINARY_DIR}/test-inputs")
@@ -314,7 +387,7 @@ if(BUILD_TESTING)
         opencl.invalid.unterminated_string_at_eof
         "${OPEN_SLEX_UNTERMINATED_STRING_EOF}"
         1
-        "invalid string literal"
+        "(invalid string literal|expected expression|missing terminating)"
     )
 
     set(OPEN_SLEX_UNTERMINATED_COMMENT_EOF
@@ -327,7 +400,7 @@ if(BUILD_TESTING)
         opencl.invalid.unterminated_comment_at_eof
         "${OPEN_SLEX_UNTERMINATED_COMMENT_EOF}"
         1
-        "unterminated block comment"
+        "(unterminated block comment|unterminated .+ comment)"
     )
 
     set(OPEN_SLEX_OBFUSCATION_INPUT
@@ -472,6 +545,25 @@ if(BUILD_TESTING)
         opencl.obfuscation.comment_boundaries
         PROPERTIES LABELS "opencl;obfuscation;comments" TIMEOUT 10
     )
+
+    if(OPEN_SLEX_HAS_CLANG_FRONTEND)
+        set(OPEN_SLEX_CLANG_SEMANTIC_OUTPUT
+            "${OPEN_SLEX_GENERATED_TEST_DIR}/clang-semantics-obfuscated.cl"
+        )
+        add_test(
+            NAME opencl.obfuscation.clang_semantics
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-DPARSER=$<TARGET_FILE:OpenSLex>"
+                "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_clang_semantics.cl"
+                "-DOUTPUT=${OPEN_SLEX_CLANG_SEMANTIC_OUTPUT}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunClangSemanticTest.cmake"
+        )
+        set_tests_properties(
+            opencl.obfuscation.clang_semantics
+            PROPERTIES LABELS "opencl;obfuscation;clang;semantic" TIMEOUT 20
+        )
+    endif()
 
     add_test(
         NAME obfuscation.behavior_equivalence
@@ -659,6 +751,12 @@ if(BUILD_TESTING)
         opencl.valid.line_comment_at_eof
         PROPERTIES LABELS "opencl;valid"
     )
+    if(OPEN_SLEX_HAS_CLANG_FRONTEND)
+        set_tests_properties(
+            opencl.valid.clang_semantics
+            PROPERTIES LABELS "opencl;valid;clang;semantic"
+        )
+    endif()
     set_tests_properties(
         opencl.invalid.string_escape
         opencl.invalid.string_newline
@@ -668,4 +766,10 @@ if(BUILD_TESTING)
         opencl.invalid.preprocessor_unterminated
         PROPERTIES LABELS "opencl;invalid"
     )
+    if(OPEN_SLEX_HAS_CLANG_FRONTEND)
+        set_tests_properties(
+            opencl.invalid.clang_undeclared_identifier
+            PROPERTIES LABELS "opencl;invalid;clang;semantic"
+        )
+    endif()
 endif()

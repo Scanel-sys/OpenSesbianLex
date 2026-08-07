@@ -29,8 +29,10 @@ jobs:
           sudo apt-get update
           sudo apt-get install --yes \
             bison \
+            clang \
             flex \
             g++ \
+            libclang-dev \
             ninja-build \
             ocl-icd-opencl-dev \
             ${{ matrix.package }}
@@ -39,6 +41,7 @@ jobs:
         run: >-
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
+          -DOPEN_SLEX_FRONTEND=CLANG
           -DOPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS=ON
           -DOPEN_SLEX_OPENCL_RUNTIME_LAUNCHER=${{ matrix.launcher }}
 
@@ -69,7 +72,10 @@ jobs:
 
       - name: Configure
         shell: msys2 {0}
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DOPEN_SLEX_FRONTEND=LEGACY
 
       - name: Build
         shell: msys2 {0}
@@ -88,13 +94,14 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes bison clang flex ninja-build
+          sudo apt-get install --yes bison clang flex libclang-dev ninja-build
 
       - name: Configure
         run: >-
           cmake -S . -B build-sanitized -G Ninja
           -DCMAKE_BUILD_TYPE=RelWithDebInfo
           -DCMAKE_CXX_COMPILER=clang++
+          -DOPEN_SLEX_FRONTEND=CLANG
           -DOPEN_SLEX_ENABLE_SANITIZERS=ON
           -DOPEN_SLEX_BUILD_FUZZER=ON
 

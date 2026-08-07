@@ -1,5 +1,6 @@
 #include "TextHandler.hpp"
 #include "AtomicFileWriter.hpp"
+#include "ClangFrontend.hpp"
 #include "IdentifierResolver.hpp"
 
 #include <algorithm>
@@ -37,6 +38,14 @@ enum class ExitCode
     SyntaxError = 1,
     UsageError = 2,
     InputError = 3,
+    FrontendError = 4,
+};
+
+enum class FrontendMode
+{
+    Auto,
+    Clang,
+    Legacy,
 };
 
 enum class ReadLineResult
@@ -47,12 +56,15 @@ enum class ReadLineResult
 };
 
 std::ifstream inputFile;
+std::istringstream transformedInput;
+std::istream* activeInput = &inputFile;
 std::string lineBuffer;
 
 bool endOfFile = false;
 bool inputReadError = false;
 bool syntaxError = false;
 bool suppressDiagnostics = false;
+bool legacyOpaquePredicatePass = true;
 
 int currentRow = 0;
 std::size_t bufferOffset = 0;
@@ -102,6 +114,11 @@ public:
     void setSeed(std::uint32_t seed)
     {
         seed_ = seed == 0 ? 0x6d2b79f5u : seed;
+    }
+
+    void setIdentifiersAlreadyResolved(bool value)
+    {
+        identifiersAlreadyResolved_ = value;
     }
 
     void processToken(const char* token, bool isIdentifier)
@@ -154,7 +171,10 @@ public:
 
     bool writeResult(std::ostream& output)
     {
-        obfuscateIdentifiers();
+        if (!identifiersAlreadyResolved_)
+        {
+            obfuscateIdentifiers();
+        }
         obfuscatePunctuators();
 
         const ObfuscationToken* previous = nullptr;
@@ -181,6 +201,7 @@ private:
     std::size_t ifBodyStart_ = 0;
     std::uint32_t opaquePredicateIndex_ = 0;
     std::uint32_t seed_ = 0x9e3779b9u;
+    bool identifiersAlreadyResolved_ = false;
 
     static bool isIdentifierCharacter(char character)
     {
@@ -369,9 +390,9 @@ ReadLineResult getNextLine()
     endOfFile = false;
     lineBuffer.clear();
 
-    if (std::getline(inputFile, lineBuffer))
+    if (std::getline(*activeInput, lineBuffer))
     {
-        if (!inputFile.eof())
+        if (!activeInput->eof())
         {
             lineBuffer.push_back('\n');
         }
@@ -380,7 +401,7 @@ ReadLineResult getNextLine()
         return ReadLineResult::Line;
     }
 
-    if (inputFile.bad() || !inputFile.eof())
+    if (activeInput->bad() || !activeInput->eof())
     {
         inputReadError = true;
         return ReadLineResult::Error;
@@ -409,12 +430,82 @@ bool parseSeed(const char* text, std::uint32_t& seed)
     return true;
 }
 
+bool parseFrontendMode(const char* text, FrontendMode& mode)
+{
+    if (text == nullptr)
+    {
+        return false;
+    }
+    if (std::strcmp(text, "auto") == 0)
+    {
+        mode = FrontendMode::Auto;
+        return true;
+    }
+    if (std::strcmp(text, "clang") == 0)
+    {
+        mode = FrontendMode::Clang;
+        return true;
+    }
+    if (std::strcmp(text, "legacy") == 0)
+    {
+        mode = FrontendMode::Legacy;
+        return true;
+    }
+    return false;
+}
+
+bool hasOpenCLFileExtension(const std::string& path)
+{
+    if (path.size() < 3)
+    {
+        return false;
+    }
+    std::string extension = path.substr(path.size() - 3);
+    std::transform(
+        extension.begin(), extension.end(), extension.begin(),
+        [](char character) {
+            return static_cast<char>(std::tolower(
+                static_cast<unsigned char>(character)));
+        });
+    return extension == ".cl";
+}
+
+bool readSourceFile(
+    const char* path,
+    std::string& source,
+    std::string& error)
+{
+    std::ifstream file(path, std::ios::binary);
+    if (!file.is_open())
+    {
+        error = "cannot open input file";
+        return false;
+    }
+
+    std::ostringstream buffer;
+    buffer << file.rdbuf();
+    if (file.bad())
+    {
+        error = "failed to read input file";
+        return false;
+    }
+    source = buffer.str();
+    return true;
+}
+
 void printUsage(const char* programName)
 {
     std::cerr << "Usage: " << programName
-              << " [--seed <uint32>] <input-file> [output-file]\n";
+              << " [--seed <uint32>] [--frontend auto|clang|legacy]"
+                 " [--clang-arg <argument>]..."
+                 " <input-file> [output-file]\n";
 }
 } // namespace
+
+bool UseLegacyOpaquePredicatePass()
+{
+    return legacyOpaquePredicatePass;
+}
 
 int ClassifyPreprocessorDirective(const char* directive)
 {
@@ -585,11 +676,15 @@ void ResetOpenSLexFrontendForFuzzing()
         inputFile.close();
     }
     inputFile.clear();
+    transformedInput.clear();
+    transformedInput.str("");
+    activeInput = &inputFile;
     lineBuffer.clear();
     endOfFile = false;
     inputReadError = false;
     syntaxError = false;
     suppressDiagnostics = true;
+    legacyOpaquePredicatePass = true;
     currentRow = 1;
     bufferOffset = 0;
     tokenStart = 0;
@@ -609,18 +704,61 @@ int main(int argc, char* argv[])
                                   : "OpenSLex";
     int argumentIndex = 1;
     std::uint32_t seed = 0x9e3779b9u;
+    FrontendMode frontendMode = FrontendMode::Auto;
+    std::vector<std::string> clangArguments;
 
-    if (argumentIndex < argc &&
-        std::strcmp(argv[argumentIndex], "--seed") == 0)
+    while (argumentIndex < argc)
     {
-        if (argumentIndex + 1 >= argc ||
-            !parseSeed(argv[argumentIndex + 1], seed))
+        if (std::strcmp(argv[argumentIndex], "--seed") == 0)
         {
-            std::cerr << "Error: --seed requires an unsigned 32-bit value.\n";
-            printUsage(programName);
-            return static_cast<int>(ExitCode::UsageError);
+            if (argumentIndex + 1 >= argc ||
+                !parseSeed(argv[argumentIndex + 1], seed))
+            {
+                std::cerr
+                    << "Error: --seed requires an unsigned 32-bit value.\n";
+                printUsage(programName);
+                return static_cast<int>(ExitCode::UsageError);
+            }
+            argumentIndex += 2;
+            continue;
         }
-        argumentIndex += 2;
+        if (std::strcmp(argv[argumentIndex], "--frontend") == 0)
+        {
+            if (argumentIndex + 1 >= argc ||
+                !parseFrontendMode(argv[argumentIndex + 1], frontendMode))
+            {
+                std::cerr
+                    << "Error: --frontend requires auto, clang, or legacy.\n";
+                printUsage(programName);
+                return static_cast<int>(ExitCode::UsageError);
+            }
+            argumentIndex += 2;
+            continue;
+        }
+        if (std::strcmp(argv[argumentIndex], "--clang-arg") == 0)
+        {
+            if (argumentIndex + 1 >= argc)
+            {
+                std::cerr << "Error: --clang-arg requires an argument.\n";
+                printUsage(programName);
+                return static_cast<int>(ExitCode::UsageError);
+            }
+            clangArguments.push_back(argv[argumentIndex + 1]);
+            argumentIndex += 2;
+            continue;
+        }
+        const char clangArgumentPrefix[] = "--clang-arg=";
+        if (std::strncmp(
+                argv[argumentIndex],
+                clangArgumentPrefix,
+                sizeof(clangArgumentPrefix) - 1) == 0)
+        {
+            clangArguments.push_back(
+                argv[argumentIndex] + sizeof(clangArgumentPrefix) - 1);
+            ++argumentIndex;
+            continue;
+        }
+        break;
     }
 
     const int positionalCount = argc - argumentIndex;
@@ -636,17 +774,82 @@ int main(int argc, char* argv[])
         : "obfuscated_result.cl";
     obfuscator.setSeed(seed);
 
-    inputFile.open(inputPath);
-    if (!inputFile.is_open())
+    const bool useClangFrontend =
+        frontendMode == FrontendMode::Clang ||
+        (frontendMode == FrontendMode::Auto &&
+         HasClangSemanticFrontend() &&
+         hasOpenCLFileExtension(inputPath));
+
+    if (frontendMode == FrontendMode::Clang &&
+        !HasClangSemanticFrontend())
     {
-        std::cerr << "Error: cannot open input file '" << inputPath << "'.\n";
-        return static_cast<int>(ExitCode::InputError);
+        std::cerr
+            << "Error: this OpenSLex build does not contain the Clang "
+               "semantic frontend. Reconfigure with "
+               "-DOPEN_SLEX_FRONTEND=CLANG.\n";
+        return static_cast<int>(ExitCode::FrontendError);
+    }
+
+    if (useClangFrontend)
+    {
+        std::string source;
+        std::string inputError;
+        if (!readSourceFile(inputPath, source, inputError))
+        {
+            std::cerr << "Error: " << inputError << " '" << inputPath
+                      << "'.\n";
+            return static_cast<int>(ExitCode::InputError);
+        }
+
+        ClangFrontendOptions options;
+        options.seed = seed;
+        options.compilerArguments = clangArguments;
+        const ClangFrontendResult frontend = RunClangSemanticFrontend(
+            inputPath, source, options);
+        if (!frontend.diagnostics.empty())
+        {
+            std::cerr << frontend.diagnostics;
+            if (frontend.diagnostics.back() != '\n')
+            {
+                std::cerr << '\n';
+            }
+        }
+        if (frontend.status != ClangFrontendStatus::Success)
+        {
+            return static_cast<int>(
+                frontend.status == ClangFrontendStatus::SyntaxError
+                    ? ExitCode::SyntaxError
+                    : ExitCode::FrontendError);
+        }
+
+        transformedInput.str(frontend.transformedSource);
+        transformedInput.clear();
+        activeInput = &transformedInput;
+        legacyOpaquePredicatePass = false;
+        obfuscator.setIdentifiersAlreadyResolved(true);
+    }
+    else
+    {
+        inputFile.open(inputPath);
+        if (!inputFile.is_open())
+        {
+            std::cerr << "Error: cannot open input file '" << inputPath
+                      << "'.\n";
+            return static_cast<int>(ExitCode::InputError);
+        }
+        activeInput = &inputFile;
     }
 
     const ReadLineResult firstLine = getNextLine();
     if (firstLine == ReadLineResult::Line)
     {
-        if (yyparse() != 0)
+        if (useClangFrontend)
+        {
+            while (yylex() != 0)
+            {
+            }
+        }
+        else if (yyparse() != 0)
         {
             syntaxError = true;
         }
@@ -663,7 +866,10 @@ int main(int argc, char* argv[])
         return static_cast<int>(ExitCode::SyntaxError);
     }
 
-    inputFile.close();
+    if (inputFile.is_open())
+    {
+        inputFile.close();
+    }
 
     std::ostringstream outputBuffer;
     if (!obfuscator.writeResult(outputBuffer))

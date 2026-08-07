@@ -71,7 +71,14 @@ PREPROCESSOR_DIRECTIVE          [ \t]*#[^\r\n]*(\\\r?\n[^\r\n]*)*
                     return INVALID_COMMENT;
                   }
 
-if              { if_processing = 1; BeginToken(yytext); return IF; }
+if              {
+                    if (UseLegacyOpaquePredicatePass())
+                    {
+                        if_processing = 1;
+                    }
+                    BeginToken(yytext);
+                    return IF;
+                  }
 else            { BeginToken(yytext); return ELSE; }
 for             { BeginToken(yytext); return FOR; }
 while           { BeginToken(yytext); return WHILE; }

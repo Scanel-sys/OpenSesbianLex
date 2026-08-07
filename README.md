@@ -1,14 +1,19 @@
 # OpenSesbianLex
 
-OpenSesbianLex is a Flex/Bison-based parser and source obfuscator for a subset
-of C and OpenCL C. A successful parse produces an obfuscated source file.
+OpenSesbianLex is an OpenCL C source obfuscator. Its primary semantic frontend
+is Clang/libclang: Clang validates the translation unit and binds declarations
+to their exact references before identifiers are rewritten. Flex performs the
+final lexical output pass. The older Flex/Bison parser remains available as a
+compatibility frontend for builds without libclang and for historical C input.
 
 ## Requirements
 
 - CMake 3.20 or newer
-- A C++ compiler with C++11 support
+- A C++ compiler with C++14 support
 - Bison 2.7 or newer
 - Flex 2.6 or newer
+- Clang and the libclang development package (recommended and required by
+  `-DOPEN_SLEX_FRONTEND=CLANG`)
 - Ninja is recommended, but another CMake generator can be used
 
 ### Windows: choose one toolchain
@@ -23,6 +28,12 @@ Install [WinFlexBison](https://github.com/lexxmark/winflexbison/releases),
 extract the release archive, and add the directory containing
 `win_bison.exe` and `win_flex.exe` to `PATH`. CMake accepts both the GNU
 executable names and the WinFlexBison names.
+
+Install the official LLVM Windows package as well. A default installation
+under `C:\Program Files\LLVM` is detected automatically, and CMake copies
+`libclang.dll` beside `OpenSLex.exe`. Adding LLVM's `bin` directory to `PATH`
+is optional. If LLVM is elsewhere, pass its prefix as
+`-DLibClang_ROOT=<path-to-LLVM>` when configuring CMake.
 
 Visual Studio 2019 or newer can provide the C++ compiler and the default CMake
 generator. Ninja is not required for this configuration.
@@ -47,11 +58,15 @@ pacman -S --needed \
 If the first update asks you to close the terminal, reopen **MSYS2 UCRT64**,
 run `pacman -Syu` again, and then install the packages.
 
+This MSYS2 recipe builds the compatibility frontend. Configure it with
+`-DOPEN_SLEX_FRONTEND=LEGACY`. Linux and Visual Studio are the supported
+libclang configurations.
+
 ### Ubuntu/Debian
 
 ```sh
 sudo apt update
-sudo apt install cmake ninja-build g++ bison flex
+sudo apt install cmake ninja-build g++ bison flex clang libclang-dev
 ```
 
 ## Build with Visual Studio
@@ -60,7 +75,7 @@ Run these commands from the repository root in PowerShell or a Developer
 Command Prompt:
 
 ```powershell
-cmake -S . -B build
+cmake -S . -B build -DOPEN_SLEX_FRONTEND=CLANG
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
@@ -72,7 +87,9 @@ The executable is `build/Release/OpenSLex.exe`.
 Run these commands from the repository root:
 
 ```sh
-cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -G Ninja \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DOPEN_SLEX_FRONTEND=CLANG
 cmake --build build
 ```
 
@@ -81,9 +98,10 @@ Windows and `build/OpenSLex` on Linux.
 
 ## Test
 
-CTest runs the valid C/OpenCL inputs and verifies that invalid C inputs return
-the expected error exit code. It also compiles and runs an original C++
-program and its obfuscated version, then compares their results:
+CTest runs valid and invalid C/OpenCL inputs, verifies Clang semantic binding,
+and checks that an undeclared OpenCL identifier is rejected. It also compiles
+and runs an original C++ program and its obfuscated version, then compares
+their results:
 
 ```sh
 ctest --test-dir build --output-on-failure
@@ -158,14 +176,32 @@ argument:
 ./build/OpenSLex input.cl output.cl
 ```
 
-The obfuscator builds lexical symbol scopes and renames declarations together
-with the references resolved to them. Variables, parameters, helper functions,
-typedef names, structure tags, and structure fields are handled independently;
-shadowed declarations therefore receive different generated names. Externally
-visible OpenCL kernel names, preprocessor macro definitions and parameters, and
-unresolved OpenCL built-ins are preserved. Vector selectors such as `.xy` and
-`.s0` are preserved only when the base expression has a vector type, so an
-ordinary variable named `x` is still obfuscated.
+For `.cl` files, an AUTO build uses libclang whenever it is available. You can
+select the frontend explicitly:
+
+```sh
+OpenSLex --frontend clang input.cl output.cl
+OpenSLex --frontend legacy historical-input.c output.c
+```
+
+The Clang frontend renames variables, parameters, helper functions, typedefs,
+structure tags, fields, and enum constants together with the AST references
+bound to each declaration. Shadowed declarations and a field/local pair with
+the same spelling therefore have independent identities. Externally visible
+OpenCL kernel names, macro definitions and parameters, unresolved OpenCL
+built-ins, and vector selectors such as `.xy` and `.s0` are preserved.
+
+Clang parses OpenCL C 1.2 by default and automatically loads its OpenCL builtin
+header. Additional compiler options may be repeated, for example:
+
+```sh
+OpenSLex --clang-arg=-I/path/to/headers \
+  --clang-arg=-DFEATURE_LEVEL=2 input.cl output.cl
+```
+
+Only the preprocessor configuration selected by those arguments has a full
+AST. Identifiers found in excluded conditional blocks are conservatively left
+unchanged so that another macro configuration is not silently broken.
 
 The output pass also removes selected whitespace and comments, inserts a
 side-effect-free opaque-false branch into braced `if` statements, and replaces
@@ -218,6 +254,7 @@ fuzz smoke test. A longer local campaign can be started with:
 - `1` — the input contains a syntax error
 - `2` — invalid command-line usage, such as a missing input path
 - `3` — the input file could not be opened or read
+- `4` — the requested semantic frontend could not be initialized
 
 ## Floating-point literals
 
