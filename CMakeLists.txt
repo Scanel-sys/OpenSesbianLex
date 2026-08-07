@@ -59,6 +59,8 @@ add_executable(
     OpenSLex
     src/AtomicFileWriter.cpp
     src/AtomicFileWriter.hpp
+    src/IdentifierResolver.cpp
+    src/IdentifierResolver.hpp
     src/TextHandler.cpp
     src/TextHandler.hpp
     ${BISON_OpenSLexParser_OUTPUTS}
@@ -283,6 +285,23 @@ if(BUILD_TESTING)
         PROPERTIES LABELS "opencl;obfuscation;semantic" TIMEOUT 10
     )
 
+    set(OPEN_SLEX_SYMBOL_SCOPE_OUTPUT
+        "${OPEN_SLEX_GENERATED_TEST_DIR}/symbol-scopes-obfuscated.cl"
+    )
+    add_test(
+        NAME opencl.obfuscation.symbol_scopes
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-DPARSER=$<TARGET_FILE:OpenSLex>"
+            "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_symbol_scopes.cl"
+            "-DOUTPUT=${OPEN_SLEX_SYMBOL_SCOPE_OUTPUT}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunSymbolScopeTest.cmake"
+    )
+    set_tests_properties(
+        opencl.obfuscation.symbol_scopes
+        PROPERTIES LABELS "opencl;obfuscation;semantic" TIMEOUT 10
+    )
+
     set(OPEN_SLEX_COMMENT_BOUNDARY_OUTPUT
         "${OPEN_SLEX_GENERATED_TEST_DIR}/comment-boundaries-obfuscated.cl"
     )
@@ -361,6 +380,7 @@ if(BUILD_TESTING)
         )
         list(APPEND OPEN_SLEX_OPENCL_EXAMPLES
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_comment_boundaries.cl"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_symbol_scopes.cl"
         )
         foreach(opencl_example IN LISTS OPEN_SLEX_OPENCL_EXAMPLES)
             get_filename_component(opencl_example_name "${opencl_example}" NAME)

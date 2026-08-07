@@ -27,18 +27,25 @@ endif()
 file(READ "${INPUT}" input_source)
 file(READ "${OUTPUT}" obfuscated_source)
 
-foreach(required_text
-    "int VALUE"
-    "int \nSECOND"
-    "VALUE+ +SECOND"
+foreach(required_pattern
+    "int[ \t\r\n]+[A-Za-z_][A-Za-z0-9_]*[ \t]*=1;"
+    "int[ \t\r\n]+[A-Za-z_][A-Za-z0-9_]*[ \t]*=2;"
+    "=[A-Za-z_][A-Za-z0-9_]*[+] [+][A-Za-z_][A-Za-z0-9_]*;"
 )
-    string(FIND "${obfuscated_source}" "${required_text}" text_position)
-    if(text_position EQUAL -1)
+    if(NOT obfuscated_source MATCHES "${required_pattern}")
         message(
             FATAL_ERROR
-            "Comment removal did not preserve token boundary '${required_text}'.\n"
+            "Comment removal did not preserve token boundary matching "
+            "'${required_pattern}'.\n"
             "output:\n${obfuscated_source}"
         )
+    endif()
+endforeach()
+
+foreach(original_identifier "VALUE" "SECOND")
+    if(obfuscated_source MATCHES
+       "(^|[^A-Za-z0-9_])${original_identifier}([^A-Za-z0-9_]|$)")
+        message(FATAL_ERROR "'${original_identifier}' was not obfuscated")
     endif()
 endforeach()
 

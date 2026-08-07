@@ -152,10 +152,18 @@ argument:
 ./build/OpenSLex input.cl output.cl
 ```
 
-The obfuscator currently renames detected variable identifiers, removes
-selected whitespace and comments, inserts an unreachable transformed
-block into braced `if` statements, and replaces supported punctuators with C
-digraphs or trigraphs.
+The obfuscator builds lexical symbol scopes and renames declarations together
+with the references resolved to them. Variables, parameters, helper functions,
+typedef names, structure tags, and structure fields are handled independently;
+shadowed declarations therefore receive different generated names. Externally
+visible OpenCL kernel names, preprocessor macro definitions and parameters, and
+unresolved OpenCL built-ins are preserved. Vector selectors such as `.xy` and
+`.s0` are preserved only when the base expression has a vector type, so an
+ordinary variable named `x` is still obfuscated.
+
+The output pass also removes selected whitespace and comments, inserts an
+unreachable transformed block into braced `if` statements, and replaces
+supported punctuators with C digraphs or trigraphs.
 
 ## Exit codes
 

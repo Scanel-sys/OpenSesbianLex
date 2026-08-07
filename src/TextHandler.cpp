@@ -1,5 +1,6 @@
 #include "TextHandler.hpp"
 #include "AtomicFileWriter.hpp"
+#include "IdentifierResolver.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -10,9 +11,7 @@
 #include <iomanip>
 #include <iostream>
 #include <limits>
-#include <map>
 #include <ostream>
-#include <set>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -46,9 +45,6 @@ enum class ReadLineResult
     Error,
 };
 
-constexpr std::size_t minGeneratedNameLength = 7;
-constexpr std::size_t maxGeneratedNameLength = 1024;
-
 std::ifstream inputFile;
 std::string lineBuffer;
 
@@ -62,14 +58,13 @@ std::size_t tokenStart = 0;
 std::size_t tokenLength = 0;
 std::size_t nextTokenStart = 0;
 
-std::string lastIdentifier;
-
 ReadLineResult getNextLine();
 
 struct ObfuscationToken
 {
     std::string text;
     bool isIdentifier = false;
+    std::size_t sourceIndex = std::numeric_limits<std::size_t>::max();
 };
 
 class BracesQueue
@@ -105,7 +100,10 @@ public:
     void processToken(const char* token, bool isIdentifier)
     {
         const std::string tokenText(token);
-        const ObfuscationToken obfuscationToken{tokenText, isIdentifier};
+        const std::size_t sourceIndex = sourceTokens_.size();
+        sourceTokens_.push_back({tokenText, isIdentifier});
+        const ObfuscationToken obfuscationToken{
+            tokenText, isIdentifier, sourceIndex};
         bool firstExpressionParsing = false;
 
         if (if_processing != 0)
@@ -185,19 +183,21 @@ public:
         }
     }
 
-    void rememberIdentifier(const std::string& identifier)
-    {
-        identifiers_.insert({identifier, 1});
-    }
-
     bool writeResult(std::ostream& output)
     {
         obfuscateIdentifiers();
         obfuscatePunctuators();
 
+        const ObfuscationToken* previous = nullptr;
         for (const ObfuscationToken& token : outputTokens_)
         {
+            if (previous != nullptr && needsIdentifierSeparator(
+                    *previous, token))
+            {
+                output << ' ';
+            }
             output << token.text;
+            previous = &token;
         }
         return output.good();
     }
@@ -208,15 +208,32 @@ private:
     std::vector<ObfuscationToken> tempTokens_;
     std::vector<ObfuscationToken> bodyTokens_;
     std::vector<ObfuscationToken> outputTokens_;
-    std::map<std::string, int> identifiers_;
-    std::map<std::string, std::string> renamedIdentifiers_;
-    std::set<std::string> generatedNames_;
+    std::vector<IdentifierSourceToken> sourceTokens_;
     BracesQueue braces_;
 
     std::size_t ifBodyStart_ = 0;
     std::size_t ifExpressionStart_ = 0;
     std::size_t ifExpressionEnd_ = 0;
     std::size_t ifExpressionParenthesisDepth_ = 0;
+
+    static bool isIdentifierCharacter(char character)
+    {
+        const unsigned char value = static_cast<unsigned char>(character);
+        return std::isalnum(value) != 0 || character == '_';
+    }
+
+    static bool needsIdentifierSeparator(
+        const ObfuscationToken& previous,
+        const ObfuscationToken& current)
+    {
+        if (previous.text.empty() || current.text.empty() ||
+            (!previous.isIdentifier && !current.isIdentifier))
+        {
+            return false;
+        }
+        return isIdentifierCharacter(previous.text.back()) &&
+            isIdentifierCharacter(current.text.front());
+    }
 
     static void appendTokens(
         std::vector<ObfuscationToken>& destination,
@@ -232,7 +249,8 @@ private:
 
     void pushOutputToken(const std::string& text)
     {
-        outputTokens_.push_back({text, false});
+        outputTokens_.push_back(
+            {text, false, std::numeric_limits<std::size_t>::max()});
     }
 
     void makeDeadEnd()
@@ -311,96 +329,20 @@ private:
         }
     }
 
-    std::string makeRandomName(std::size_t length) const
-    {
-        static const char alphanumeric[] =
-            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-        static const char alphabetic[] =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-
-        std::string result;
-        result.reserve(length);
-        for (std::size_t index = 0; index < length; ++index)
-        {
-            const char* alphabet = index == 0 ? alphabetic : alphanumeric;
-            const std::size_t alphabetSize =
-                index == 0 ? sizeof(alphabetic) - 1 : sizeof(alphanumeric) - 1;
-            result.push_back(alphabet[std::rand() % alphabetSize]);
-        }
-        return result;
-    }
-
-    static bool isVectorSelector(const std::string& identifier)
-    {
-        if (identifier.empty())
-        {
-            return false;
-        }
-
-        const bool xyzw = identifier.size() <= 4 &&
-            identifier.find_first_not_of("xyzw") == std::string::npos;
-        const bool rgba = identifier.size() <= 4 &&
-            identifier.find_first_not_of("rgba") == std::string::npos;
-        const bool hexadecimalSelector = identifier.size() >= 2 &&
-            identifier.size() <= 17 && identifier.front() == 's' &&
-            identifier.find_first_not_of("0123456789abcdefABCDEF", 1) ==
-                std::string::npos;
-        const bool halfSelector = identifier == "lo" || identifier == "hi" ||
-            identifier == "even" || identifier == "odd";
-        return xyzw || rgba || hexadecimalSelector || halfSelector;
-    }
-
-    static bool isProtectedOpenCLIdentifier(const std::string& identifier)
-    {
-        if (isVectorSelector(identifier) ||
-            identifier.compare(0, 2, "__") == 0 ||
-            (identifier.size() >= 2 &&
-             identifier.compare(identifier.size() - 2, 2, "_t") == 0))
-        {
-            return true;
-        }
-
-        return std::isupper(static_cast<unsigned char>(identifier.front())) != 0 &&
-            identifier.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") ==
-                std::string::npos;
-    }
-
     void obfuscateIdentifiers()
     {
-        for (const auto& identifier : identifiers_)
-        {
-            if (isProtectedOpenCLIdentifier(identifier.first))
-            {
-                continue;
-            }
-
-            std::string newName;
-            const std::size_t generatedLength = std::max<std::size_t>(
-                1, (minGeneratedNameLength + identifier.first.size()) %
-                       maxGeneratedNameLength);
-
-            do
-            {
-                newName = makeRandomName(generatedLength);
-            } while (
-                identifiers_.find(newName) != identifiers_.end() ||
-                generatedNames_.find(newName) != generatedNames_.end());
-
-            renamedIdentifiers_.insert({identifier.first, newName});
-            generatedNames_.insert(newName);
-        }
+        const std::vector<std::string> replacements =
+            ResolveIdentifierNames(sourceTokens_);
 
         for (ObfuscationToken& token : outputTokens_)
         {
-            if (!token.isIdentifier)
+            if (!token.isIdentifier || token.sourceIndex >= replacements.size())
             {
                 continue;
             }
-
-            const auto renamed = renamedIdentifiers_.find(token.text);
-            if (renamed != renamedIdentifiers_.end())
+            if (!replacements[token.sourceIndex].empty())
             {
-                token.text = renamed->second;
+                token.text = replacements[token.sourceIndex];
             }
         }
     }
@@ -553,22 +495,8 @@ void BeginToken(const char* token)
         return;
     }
 
-    const std::string currentToken(token);
     const bool isIdentifier = if_id != 0;
-    if (isIdentifier)
-    {
-        lastIdentifier = currentToken;
-        if_id = 0;
-    }
-    else if (currentToken != "(" && !lastIdentifier.empty())
-    {
-        obfuscator.rememberIdentifier(lastIdentifier);
-        lastIdentifier.clear();
-    }
-    else
-    {
-        lastIdentifier.clear();
-    }
+    if_id = 0;
 
     obfuscator.processToken(token, isIdentifier);
 
