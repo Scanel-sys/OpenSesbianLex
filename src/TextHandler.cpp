@@ -1,648 +1,623 @@
 #include "TextHandler.hpp"
 
-#include <vector>
-#include <string>
-#include <map>
-#include <iostream>
-#include <ctime>
 #include <algorithm>
+#include <cctype>
+#include <cstddef>
+#include <cstdlib>
+#include <cstring>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <limits>
+#include <map>
+#include <ostream>
+#include <set>
+#include <string>
+#include <vector>
 
-#define true 1
-#define false 0
-#define PREAMBULA_SIZE 7
-#define lMaxBuffer      1000
-#define MIN_NAME_SIZE   7
-#define MAX_NAME_SIZE   1024
-/*
- * global variable
- */
 int debug = 0;
 
-/*
-    local vars
-*/
-static FILE *input_file;
-static FILE *obfuscated_file;
-static int eof = 0;
-static int nRow = 0;
-static int nBuffer = 0;
-static int lBuffer = 0;
-static int nTokenStart = 0;
-static int nTokenLength = 0;
-static int nTokenNextStart = 0;
-
-static char *buffer;
-static char *temp_buffer;
-static char *obf_buffer;
-
 extern int yylineno;
-int err = false;
-int directives_ended = false;
-int if_processing = false;
-int if_id = false;
-int if_type = false;
 
-std::string last_token;
-std::string act_token;
+// These flags are shared with the generated lexer/parser. They retain the
+// obfuscation state introduced on dev-obfuscator while the file handling and
+// diagnostics below use the safer C++ implementation from main.
+int directives_ended = 0;
+int if_processing = 0;
+int if_id = 0;
+int if_type = 0;
 
-std::map<std::string, int> ids_dict;
-std::map<std::string, std::string> ids_dict_with_new_names;
+namespace
+{
+enum class ExitCode
+{
+    Success = 0,
+    SyntaxError = 1,
+    UsageError = 2,
+    InputError = 3,
+};
 
-static int getNextLine(void);
+enum class ReadLineResult
+{
+    Line,
+    EndOfFile,
+    Error,
+};
 
+constexpr std::size_t minGeneratedNameLength = 7;
+constexpr std::size_t maxGeneratedNameLength = 1024;
 
-class BracesQueue{
+std::ifstream inputFile;
+std::string lineBuffer;
 
+bool endOfFile = false;
+bool inputReadError = false;
+bool syntaxError = false;
+
+int currentRow = 0;
+std::size_t bufferOffset = 0;
+std::size_t tokenStart = 0;
+std::size_t tokenLength = 0;
+std::size_t nextTokenStart = 0;
+
+std::string lastIdentifier;
+
+ReadLineResult getNextLine();
+
+struct ObfuscationToken
+{
+    std::string text;
+    bool isIdentifier = false;
+};
+
+class BracesQueue
+{
 public:
-    void push() {braces++;}
-    int pop() 
-    { 
-        if(braces == 1)
+    void push()
+    {
+        ++braces_;
+    }
+
+    int pop()
+    {
+        if (braces_ == 1)
         {
-            braces--;
+            --braces_;
             return 0;
         }
-        else if(braces > 1)
+        if (braces_ > 1)
         {
-            braces--;
+            --braces_;
             return 1;
         }
-
         return -1;
     }
+
 private:
-    size_t braces = 0;
+    std::size_t braces_ = 0;
 };
 
-class Obfuscator{
-
+class Obfuscator
+{
 public:
-
-    void push_curly_brace(){ braces_queue_.push(); }
-    int  pop_curly_brace(){ return braces_queue_.pop(); }
-
-    void print_to_file(FILE * file)
+    void processToken(const char* token, bool isIdentifier)
     {
-        for(size_t i = 0; i < output_tokens_.size(); i++)
+        const std::string tokenText(token);
+        const ObfuscationToken obfuscationToken{tokenText, isIdentifier};
+        bool firstExpressionParsing = false;
+
+        if (if_processing != 0)
         {
-            fprintf(obfuscated_file, "%s", output_tokens_[i].data());
-        }
-        output_tokens_.clear();
-    }
+            tempTokens_.push_back(obfuscationToken);
+            expressionTokens_.push_back(obfuscationToken);
 
-    void push_first_expression_token(char* token)   { first_expression_tokens_.push_back(token); }
-    void push_first_expression_token(std::string token)         { first_expression_tokens_.push_back(token); }
-
-    void push_expression_token(char* token)         { expression_tokens_.push_back(token); }
-    void push_expression_token(std::string token)   { expression_tokens_.push_back(token); }
-
-    void push_temp_token(char* token)               { temp_tokens_.push_back(token); }
-    void push_temp_token(std::string token)         { temp_tokens_.push_back(token); }
-
-    void push_body_token(char* token)               { body_tokens_.push_back(token); }
-    void push_body_token(std::string token)         { body_tokens_.push_back(token); }
-
-    void push_output_token(char* token)             { output_tokens_.push_back(token); }
-    void push_output_token(std::string token)       { output_tokens_.push_back(token); }
-                                                    
-
-    size_t get_first_expression_tokens_size()  { return first_expression_tokens_.size(); }
-    size_t get_expression_tokens_size()        { return expression_tokens_.size(); }
-    size_t get_temp_tokens_size()              { return temp_tokens_.size(); }
-    size_t get_body_tokens_size()              { return body_tokens_.size(); }
-    size_t get_output_tokens_size()            { return output_tokens_.size(); }
-
-    void obfuscate_output_tokens()
-    {
-        for(size_t i = 0; i < get_output_tokens_size(); i++)
-        {
-            if(output_tokens_[i] == "[" && i % 2 == 0)
-                output_tokens_[i].assign("<:");
-            
-            else if(output_tokens_[i] == "[" && i % 2 == 1)
-                output_tokens_[i].assign("??(");
-
-            else if(output_tokens_[i] == "]" && i % 2 == 0)
-                output_tokens_[i].assign(":>");
-            
-            else if(output_tokens_[i] == "]" && i % 2 == 1)
-                output_tokens_[i].assign("??)");
-
-            else if(output_tokens_[i] == "{" && i % 2 == 0)
-                output_tokens_[i].assign("<%");
-
-            else if(output_tokens_[i] == "{" && i % 2 == 1)
-                output_tokens_[i].assign("??<");
-
-            else if(output_tokens_[i] == "}" && i % 2 == 0)
-                output_tokens_[i].assign("%>");
-
-            else if(output_tokens_[i] == "}" && i % 2 == 1)
-                output_tokens_[i].assign("??>");
-
-            else if(output_tokens_[i] == "#" && i % 2 == 0)
-                output_tokens_[i].assign("%:");
-
-            else if(output_tokens_[i] == "#" && i % 2 == 1)
-                output_tokens_[i].assign("??=");
-            
-            else if(output_tokens_[i] == "\\")
-                output_tokens_[i].assign("??/");
-
-            else if(output_tokens_[i] == "^")
-                output_tokens_[i].assign("??'");
-
-            else if(output_tokens_[i] == "|")
-                output_tokens_[i].assign("??!");
-
-            else if(output_tokens_[i] == "~")
-                output_tokens_[i].assign("??-");
-            
-        }
-    }
-
-    void push_tokens(std::vector<std::string>& dest, std::vector<std::string>& source, size_t start, size_t cnt)
-    {
-        for(size_t i = start; i < start + cnt; i++)
-        {
-            dest.push_back(source[i]);
-        }
-    }
-
-    void push_tokens(std::vector<std::string>& dest, std::vector<std::string> source, size_t cnt)
-    {
-        for(size_t i = 0; i < cnt; i++)
-        {
-            dest.push_back(source[i]);
-        }
-    }
-
-    void push_tokens(std::vector<std::string>& dest, std::vector<std::string>& source)
-    {
-        for(size_t i = 0; i < source.size(); i++)
-            dest.push_back(source[i]);
-    }
-
-    std::vector<std::string>& get_first_expression_tokens() { return first_expression_tokens_; }
-    std::vector<std::string>& get_expression_tokens()       { return expression_tokens_; }
-    std::vector<std::string>& get_body_tokens()             { return body_tokens_; }
-    std::vector<std::string>& get_temp_tokens()             { return temp_tokens_; }
-    std::vector<std::string>& get_output_tokens()           { return output_tokens_; }
-
-    void clear_first_expression_tokens()    { first_expression_tokens_.clear(); }
-    void clear_expression_tokens()          { expression_tokens_.clear(); }
-    void clear_body_tokens()                { body_tokens_.clear(); }
-    void clear_temp_tokens()                { temp_tokens_.clear(); }
-    void clear_output_tokens()              { output_tokens_.clear(); }
-
-    
-    void ProcessToken(char* token)
-    {
-        bool first_expression_parsing = false;
-
-        if(if_processing == true)
-        {
-            push_temp_token(token);
-            push_expression_token(token);
-
-            if(if_expr_start_pos_ == 0 && token[0] == '(')
+            if (ifExpressionStart_ == 0 && tokenText == "(")
             {
-                if_expr_start_pos_ = get_temp_tokens_size();
+                ifExpressionStart_ = tempTokens_.size();
             }
 
-            if(if_expr_end_pos_ == 0 && token[0] == ')')
+            if (ifExpressionEnd_ == 0 && tokenText == ")")
             {
-                if_expr_end_pos_ = get_temp_tokens_size() - 1;
-            }
-            
-            if(if_body_start_pos_ == 0 && token[0] == '{')
-            {
-                if_body_start_pos_ = get_temp_tokens_size();
+                ifExpressionEnd_ = tempTokens_.size() - 1;
             }
 
-            first_expression_parsing = (get_temp_tokens_size() != if_expr_start_pos_ && if_expr_start_pos_ != 0 && if_expr_end_pos_ == 0);
-
-            if(first_expression_parsing == true)
+            if (ifBodyStart_ == 0 && tokenText == "{")
             {
-                push_first_expression_token(token);
+                ifBodyStart_ = tempTokens_.size();
             }
 
-            if(strcmp(token, "{") == 0)
+            firstExpressionParsing =
+                tempTokens_.size() != ifExpressionStart_ &&
+                ifExpressionStart_ != 0 && ifExpressionEnd_ == 0;
+
+            if (firstExpressionParsing)
             {
-                push_curly_brace();
+                firstExpressionTokens_.push_back(obfuscationToken);
             }
-            else if(strcmp(token, "}") == 0 && pop_curly_brace() == 0)
+
+            if (tokenText == "{")
             {
-                if_processing = false;
+                braces_.push();
+            }
+            else if (tokenText == "}" && braces_.pop() == 0)
+            {
+                if_processing = 0;
             }
         }
 
-        if(get_temp_tokens_size() != 0 && if_processing == false)
+        if (!tempTokens_.empty() && if_processing == 0)
         {
-            push_tokens(body_tokens_, temp_tokens_, if_body_start_pos_, get_temp_tokens_size() - if_body_start_pos_ - 1);
+            appendTokens(
+                bodyTokens_, tempTokens_, ifBodyStart_,
+                tempTokens_.size() - ifBodyStart_ - 1);
 
-            push_tokens(output_tokens_, temp_tokens_, if_body_start_pos_);
-            make_dead_end();
-            push_tokens(output_tokens_, body_tokens_, get_body_tokens_size());
-            push_output_token("}");
+            appendTokens(outputTokens_, tempTokens_, 0, ifBodyStart_);
+            makeDeadEnd();
+            appendTokens(outputTokens_, bodyTokens_, 0, bodyTokens_.size());
+            pushOutputToken("}");
 
-            clear_temp_tokens();
-            clear_expression_tokens();
-            clear_body_tokens();
-
-            if_expr_start_pos_ = if_body_start_pos_ = 0;
-            if_expr_end_pos_ = 0;
-            clear_first_expression_tokens();
-            clear_expression_tokens();
+            tempTokens_.clear();
+            expressionTokens_.clear();
+            bodyTokens_.clear();
+            firstExpressionTokens_.clear();
+            ifExpressionStart_ = 0;
+            ifExpressionEnd_ = 0;
+            ifBodyStart_ = 0;
         }
-        else if(get_temp_tokens_size() == 0)
+        else if (tempTokens_.empty())
         {
-            push_output_token(token);
+            outputTokens_.push_back(obfuscationToken);
         }
     }
 
-    void ObfuscateIds()
+    void rememberIdentifier(const std::string& identifier)
     {
-        for (auto i : ids_dict)
+        identifiers_.insert({identifier, 1});
+    }
+
+    bool writeResult(std::ostream& output)
+    {
+        obfuscateIdentifiers();
+        obfuscatePunctuators();
+
+        for (const ObfuscationToken& token : outputTokens_)
         {
-            std::string new_name;
-            std::string old_name = i.first;
+            output << token.text;
+        }
+        return output.good();
+    }
+
+private:
+    std::vector<ObfuscationToken> firstExpressionTokens_;
+    std::vector<ObfuscationToken> expressionTokens_;
+    std::vector<ObfuscationToken> tempTokens_;
+    std::vector<ObfuscationToken> bodyTokens_;
+    std::vector<ObfuscationToken> outputTokens_;
+    std::map<std::string, int> identifiers_;
+    std::map<std::string, std::string> renamedIdentifiers_;
+    std::set<std::string> generatedNames_;
+    BracesQueue braces_;
+
+    std::size_t ifBodyStart_ = 0;
+    std::size_t ifExpressionStart_ = 0;
+    std::size_t ifExpressionEnd_ = 0;
+
+    static void appendTokens(
+        std::vector<ObfuscationToken>& destination,
+        const std::vector<ObfuscationToken>& source,
+        std::size_t start,
+        std::size_t count)
+    {
+        for (std::size_t index = start; index < start + count; ++index)
+        {
+            destination.push_back(source[index]);
+        }
+    }
+
+    void pushOutputToken(const std::string& text)
+    {
+        outputTokens_.push_back({text, false});
+    }
+
+    void makeDeadEnd()
+    {
+        appendTokens(outputTokens_, tempTokens_, 0, ifExpressionStart_);
+        pushOutputToken("!(");
+        appendTokens(
+            outputTokens_, firstExpressionTokens_, 0,
+            firstExpressionTokens_.size());
+        pushOutputToken("))");
+        pushOutputToken("{");
+        obfuscateFullBlock();
+        pushOutputToken("}");
+    }
+
+    void obfuscateFullBlock()
+    {
+        for (const ObfuscationToken& token : expressionTokens_)
+        {
+            if (token.text == "||")
+            {
+                pushOutputToken("&&");
+            }
+            else if (token.text == "&&")
+            {
+                pushOutputToken("||");
+            }
+            else if (token.text == "|")
+            {
+                pushOutputToken("^");
+            }
+            else if (token.text == "&")
+            {
+                pushOutputToken("|");
+            }
+            else if (token.text == "+")
+            {
+                pushOutputToken("*");
+            }
+            else if (token.text == "-")
+            {
+                pushOutputToken("+");
+            }
+            else if (token.text == "%")
+            {
+                pushOutputToken("/");
+            }
+            else if (token.text == ">=")
+            {
+                pushOutputToken("<");
+            }
+            else if (token.text == "<=")
+            {
+                pushOutputToken(">");
+            }
+            else if (token.text == "<")
+            {
+                pushOutputToken(">=");
+            }
+            else if (token.text == ">")
+            {
+                pushOutputToken("<=");
+            }
+            else if (token.text == "++")
+            {
+                pushOutputToken("--");
+            }
+            else if (token.text == "--")
+            {
+                pushOutputToken("++");
+            }
+            else
+            {
+                outputTokens_.push_back(token);
+            }
+        }
+    }
+
+    std::string makeRandomName(std::size_t length) const
+    {
+        static const char alphanumeric[] =
+            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        static const char alphabetic[] =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+        std::string result;
+        result.reserve(length);
+        for (std::size_t index = 0; index < length; ++index)
+        {
+            const char* alphabet = index == 0 ? alphabetic : alphanumeric;
+            const std::size_t alphabetSize =
+                index == 0 ? sizeof(alphabetic) - 1 : sizeof(alphanumeric) - 1;
+            result.push_back(alphabet[std::rand() % alphabetSize]);
+        }
+        return result;
+    }
+
+    void obfuscateIdentifiers()
+    {
+        for (const auto& identifier : identifiers_)
+        {
+            std::string newName;
+            const std::size_t generatedLength = std::max<std::size_t>(
+                1, (minGeneratedNameLength + identifier.first.size()) %
+                       maxGeneratedNameLength);
+
             do
             {
-                new_name = GetRandomName((MIN_NAME_SIZE + i.first.size()) % MAX_NAME_SIZE);
-            } while (ids_dict.find(new_name) != ids_dict.end());
+                newName = makeRandomName(generatedLength);
+            } while (
+                identifiers_.find(newName) != identifiers_.end() ||
+                generatedNames_.find(newName) != generatedNames_.end());
 
-            ids_dict_with_new_names.insert({old_name, new_name});
+            renamedIdentifiers_.insert({identifier.first, newName});
+            generatedNames_.insert(newName);
         }
 
-        for (auto id : ids_dict_with_new_names)
+        for (ObfuscationToken& token : outputTokens_)
         {
-            std::replace(output_tokens_.begin(), output_tokens_.end(), id.first, id.second);
-        }
-    }
+            if (!token.isIdentifier)
+            {
+                continue;
+            }
 
-private:
-
-    std::vector<std::string> first_expression_tokens_;
-    std::vector<std::string> expression_tokens_;
-    std::vector<std::string> temp_tokens_;
-    std::vector<std::string> body_tokens_;
-    std::vector<std::string> output_tokens_;
-
-    class BracesQueue braces_queue_;
-
-    unsigned int if_body_start_pos_ = 0;
-    unsigned int if_expr_start_pos_ = 0;
-    unsigned int if_expr_end_pos_   = 0;
-
-    void make_dead_end()
-    {
-        push_tokens(output_tokens_, temp_tokens_, if_expr_start_pos_);
-        push_output_token("!(");
-        ObfuscateFirstExpression();
-        push_output_token("))");
-        push_output_token("{");
-        ObfuscateFullBlock();
-        push_output_token("}");
-    }
-
-    void ObfuscateFirstExpression()
-    {
-        for(size_t i = 0; i < get_first_expression_tokens_size(); i++)
-        {
-            push_output_token(first_expression_tokens_[i]);
-        }
-    }
-
-    void ObfuscateFullBlock()
-    {
-        for(size_t i = 0; i < get_expression_tokens_size(); i++)
-        {
-            if(expression_tokens_[i] == "||")
+            const auto renamed = renamedIdentifiers_.find(token.text);
+            if (renamed != renamedIdentifiers_.end())
             {
-                push_output_token("&&");
-            }
-            else if(expression_tokens_[i] == "&&")
-            {
-                push_output_token("||");
-            }
-            else if(expression_tokens_[i] == "|")
-            {
-                push_output_token("^");
-            }
-            else if(expression_tokens_[i] == "&")
-            {
-                push_output_token("|");
-            }
-            else if(expression_tokens_[i] == "+")
-            {
-                push_output_token("*");
-            }
-            else if(expression_tokens_[i] == "-")
-            {
-                push_output_token("+");
-            }
-            else if(expression_tokens_[i] == "%")
-            {
-                push_output_token("/");
-            }
-            else if(expression_tokens_[i] == ">=")
-            {
-                push_output_token("<");
-            }
-            else if(expression_tokens_[i] == "<=")
-            {
-                push_output_token(">");
-            }
-            else if(expression_tokens_[i] == "<")
-            {
-                push_output_token(">=");
-            }
-            else if(expression_tokens_[i] == ">")
-            {
-                push_output_token("=<");
-            }
-            else if(expression_tokens_[i] == "++")
-            {
-                push_output_token("--");
-            }
-            else if(expression_tokens_[i] == "--")
-            {
-                push_output_token("++");
-            }
-            else
-            {
-                push_output_token(expression_tokens_[i]);
+                token.text = renamed->second;
             }
         }
     }
 
-    std::string GetRandomName(const int len) 
+    void obfuscatePunctuators()
     {
-        static const char alphanum[] =
-            "0123456789"
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-            "abcdefghijklmnopqrstuvwxyz";
-
-        static const char alphanum_no_ciphs[] =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-            "abcdefghijklmnopqrstuvwxyz";
-
-        std::string tmp_s;
-        tmp_s.reserve(len);
-
-        for (int i = 0; i < len; ++i) 
+        for (std::size_t index = 0; index < outputTokens_.size(); ++index)
         {
-            if(i != 0)
-                tmp_s += alphanum[rand() % (sizeof(alphanum) - 1)];
-            else
-                tmp_s += alphanum_no_ciphs[rand() % (sizeof(alphanum_no_ciphs) - 1)];
+            std::string& token = outputTokens_[index].text;
+            if (token == "[")
+            {
+                token = index % 2 == 0 ? "<:" : "?" "?(";
+            }
+            else if (token == "]")
+            {
+                token = index % 2 == 0 ? ":>" : "?" "?)";
+            }
+            else if (token == "{")
+            {
+                token = index % 2 == 0 ? "<%" : "?" "?<";
+            }
+            else if (token == "}")
+            {
+                token = index % 2 == 0 ? "%>" : "?" "?>";
+            }
+            else if (token == "#")
+            {
+                token = index % 2 == 0 ? "%:" : "?" "?=";
+            }
+            else if (token == "\\")
+            {
+                token = "?" "?/";
+            }
+            else if (token == "^")
+            {
+                token = "?" "?'";
+            }
+            else if (token == "|")
+            {
+                token = "?" "?!";
+            }
+            else if (token == "~")
+            {
+                token = "?" "?-";
+            }
         }
-        
-        return tmp_s;
     }
 };
-
 
 Obfuscator obfuscator;
 
-
-/*--------------------------------------------------------------------
- * dumpChar
- * 
- * printable version of a char
- *------------------------------------------------------------------*/
-static
-char dumpChar(char c) {
-    if (  isprint(c)  )
-        return c;
-    return '@';
+char dumpChar(char character)
+{
+    const auto value = static_cast<unsigned char>(character);
+    return std::isprint(value) != 0 ? character : '@';
 }
 
-/*--------------------------------------------------------------------
- * dumpString
- * 
- * printable version of a string upto 100 character
- *------------------------------------------------------------------*/
-static
-char *dumpString(char *s) {
-    static char buf[101];
-    int i;
-    int n = strlen(s);
+std::string dumpString(const char* text)
+{
+    constexpr std::size_t maxLength = 100;
+    const std::size_t length = std::min(std::strlen(text), maxLength);
 
-    if (  n > 100  )
-        n = 100;
-
-    for (i=0; i<n; i++)
-        buf[i] = dumpChar(s[i]);
-    buf[i] = 0;
-    return buf;
-}
-
-void PrintError(const char *errorstring, ...) {
-    err = true;
-    static char errmsg[10000];
-    va_list args;
-
-    int start = nTokenStart;
-    int end=start + nTokenLength - 1;
-    int i;
-
-  /*================================================================*/
-  /* a bit more complicate version ---------------------------------*/
-/* */
-    if (  eof  ) {
-        fprintf(stdout, "...... !");
-        for (i=0; i<lBuffer; i++)
-        fprintf(stdout, ".");
-        fprintf(stdout, "^-EOF\n");
+    std::string result;
+    result.reserve(length);
+    for (std::size_t index = 0; index < length; ++index)
+    {
+        result.push_back(dumpChar(text[index]));
     }
-    else {
-        fprintf(stdout, "...... !");
-        if(start != 1)
+    return result;
+}
+
+int toLocationValue(std::size_t value)
+{
+    const auto maxValue = static_cast<std::size_t>(std::numeric_limits<int>::max());
+    return value > maxValue ? std::numeric_limits<int>::max()
+                            : static_cast<int>(value);
+}
+
+ReadLineResult getNextLine()
+{
+    bufferOffset = 0;
+    tokenStart = 0;
+    nextTokenStart = 1;
+    endOfFile = false;
+    lineBuffer.clear();
+
+    if (std::getline(inputFile, lineBuffer))
+    {
+        if (!inputFile.eof())
         {
-            for (i=0; i<start; i++)
-            fprintf(stdout, ".");
+            lineBuffer.push_back('\n');
         }
-        for (i=start; i<=end; i++)
-        fprintf(stdout, "^");
-        
-        fprintf(stdout, "\n");
+
+        ++currentRow;
+        return ReadLineResult::Line;
     }
-/* */
 
-    /*================================================================*/
-    /* print it using variable arguments -----------------------------*/
-    va_start(args, errorstring);
-    vsprintf(errmsg, errorstring, args);
-    va_end(args);
-
-    fprintf(stdout, "Error: %s at line %d\n", errmsg, yylineno);
-    
-    for (i = 1; i < 71; i++)
-        fprintf(stdout, " "); 
-    fprintf(stdout, "\n"); 
-}
-
-/*--------------------------------------------------------------------
- * DumpRow
- * 
- * dumps the contents of the current row
- *------------------------------------------------------------------*/
-void DumpRow(void) 
-{
-    if (err)
-        fprintf(stderr, "\nError(s) occured while parsing:\n\n");
-    
-    fprintf(stdout, "%6d |%.*s", nRow, lBuffer, buffer);
-}
-
-
-
-void BeginToken(char *t) 
-{
-    act_token = t;
-    if(if_id == true)
+    if (inputFile.bad() || !inputFile.eof())
     {
-        last_token = t;
-        if_id = false;
+        inputReadError = true;
+        return ReadLineResult::Error;
     }
-    else if(act_token != "(" && !last_token.empty())
+
+    endOfFile = true;
+    return ReadLineResult::EndOfFile;
+}
+} // namespace
+
+void PrintError(const char* message)
+{
+    syntaxError = true;
+    const std::size_t markerLength = std::max<std::size_t>(tokenLength, 1);
+
+    std::cerr << "...... !";
+    if (endOfFile)
     {
-        ids_dict.insert({last_token, 1});
-        last_token.clear();
+        std::cerr << std::string(lineBuffer.size(), '.') << "^-EOF\n";
     }
     else
     {
-        last_token.clear();
+        if (tokenStart != 1)
+        {
+            std::cerr << std::string(tokenStart, '.');
+        }
+        std::cerr << std::string(markerLength, '^') << '\n';
     }
-    obfuscator.ProcessToken(t);
 
-    /*================================================================*/
-    /* remember last read token --------------------------------------*/
-    nTokenStart = nTokenNextStart;
-    nTokenLength = strlen(t);
-    nTokenNextStart = nBuffer; // + 1;
-
-
-    /*================================================================*/
-    /* location for bison --------------------------------------------*/
-    yylloc.first_line = nRow;
-    yylloc.first_column = nTokenStart;
-    yylloc.last_line = nRow;
-    yylloc.last_column = nTokenStart + nTokenLength - 1;
-
-    if (  debug  ) {
-        printf("Token '%s' at %d:%d next at %d\n", dumpString(t),
-                            yylloc.first_column,
-                            yylloc.last_column, nTokenNextStart);
-    }
+    std::cerr << "Error: " << (message != nullptr ? message : "syntax error")
+              << " at line " << yylineno << "\n\n";
 }
 
-/*--------------------------------------------------------------------
-* GetNextChar
-* 
-* reads a character from input for flex
-*------------------------------------------------------------------*/
-int GetNextChar(char *b, int maxBuffer) 
+void DumpRow()
 {
-    int frc;
-
-    /*================================================================*/
-    /*----------------------------------------------------------------*/
-    if (  eof  )
-        return 0;
-
-    /*================================================================*/
-    /* read next line if at the end of the current -------------------*/
-    while (  nBuffer >= lBuffer  ) {
-        frc = getNextLine();
-        if (  frc != 0  )
-        return 0;
+    if (!syntaxError)
+    {
+        std::cerr << "\nError(s) occurred while parsing:\n\n";
     }
 
-    /*================================================================*/
-    /* ok, return character ------------------------------------------*/
-    b[0] = buffer[nBuffer];
-    nBuffer += 1;
-
-    if (  debug  )
-        printf("GetNextChar() => '%c'0x%02x at %d\n",
-                            dumpChar(b[0]), b[0], nBuffer);
-    return b[0]==0?0:1;
-}
-
-/*--------------------------------------------------------------------
- * getNextLine
- * 
- * reads a line into the buffer
- *------------------------------------------------------------------*/
-static
-int getNextLine(void) {
-    int i;
-    char *p;
-    
-    /*================================================================*/
-    /*----------------------------------------------------------------*/
-    nBuffer = 0;
-    nTokenStart = -1;
-    nTokenNextStart = 1;
-    eof = false;
-
-    /*================================================================*/
-    /* read a line ---------------------------------------------------*/
-    p = fgets(buffer, lMaxBuffer, input_file);
-    if (  p == NULL  ) {
-        if (  ferror(input_file)  )
-            return -1;
-        eof = true;
-        return 1;
+    std::cerr << std::setw(6) << currentRow << " |" << lineBuffer;
+    if (lineBuffer.empty() || lineBuffer.back() != '\n')
+    {
+        std::cerr << '\n';
     }
-
-    nRow += 1;
-    lBuffer = strlen(buffer);
-
-    /*================================================================*/
-    return 0;
 }
 
-
-int main(int argc, char *argv[])
+void BeginToken(const char* token)
 {
-    char *infile_path = argv[1];
-    input_file = fopen(infile_path, "r");
-    obfuscated_file = fopen("obfuscated_result.cl", "w");
-
-    buffer = (char*)malloc(lMaxBuffer);
-    temp_buffer = (char*)malloc(lMaxBuffer);
-    obf_buffer = (char*)malloc(lMaxBuffer);
-    temp_buffer[0] = obf_buffer[0] = '\0';
-
-    if (  buffer == NULL  ) {
-        printf("cannot allocate %d bytes of memory\n", lMaxBuffer);
-        fclose(input_file);
-        fclose(obfuscated_file);
-        return 1;
+    if (token == nullptr)
+    {
+        return;
     }
-    
-    if (  getNextLine() == 0  )
-        yyparse();
 
-    obfuscator.ObfuscateIds();
-    obfuscator.obfuscate_output_tokens();
-    obfuscator.print_to_file(obfuscated_file);
-    
-    for (auto i : ids_dict)
-        std::cout << i.first << '\n';
+    const std::string currentToken(token);
+    const bool isIdentifier = if_id != 0;
+    if (isIdentifier)
+    {
+        lastIdentifier = currentToken;
+        if_id = 0;
+    }
+    else if (currentToken != "(" && !lastIdentifier.empty())
+    {
+        obfuscator.rememberIdentifier(lastIdentifier);
+        lastIdentifier.clear();
+    }
+    else
+    {
+        lastIdentifier.clear();
+    }
 
-    free(buffer);
-    free(obf_buffer);
-    free(temp_buffer);
-    fclose(input_file);
-    fclose(obfuscated_file);
+    obfuscator.processToken(token, isIdentifier);
 
-    if(!err)
-        printf("PASS\n");
+    tokenStart = nextTokenStart;
+    tokenLength = std::strlen(token);
+    nextTokenStart = bufferOffset;
 
-    return err;
+    yylloc.first_line = currentRow;
+    yylloc.first_column = toLocationValue(tokenStart);
+    yylloc.last_line = currentRow;
+    yylloc.last_column = toLocationValue(
+        tokenStart + (tokenLength == 0 ? 0 : tokenLength - 1));
+
+    if (debug != 0)
+    {
+        std::cout << "Token '" << dumpString(token) << "' at "
+                  << yylloc.first_column << ':' << yylloc.last_column
+                  << " next at " << nextTokenStart << '\n';
+    }
+}
+
+int GetNextChar(char* destination, int maxBuffer)
+{
+    if (destination == nullptr || maxBuffer <= 0 || endOfFile)
+    {
+        return 0;
+    }
+
+    while (bufferOffset >= lineBuffer.size())
+    {
+        if (getNextLine() != ReadLineResult::Line)
+        {
+            return 0;
+        }
+    }
+
+    destination[0] = lineBuffer[bufferOffset++];
+
+    if (debug != 0)
+    {
+        const auto byteValue = static_cast<unsigned int>(
+            static_cast<unsigned char>(destination[0]));
+        std::cout << "GetNextChar() => '" << dumpChar(destination[0])
+                  << "' 0x" << std::hex << byteValue << std::dec
+                  << " at " << bufferOffset << '\n';
+    }
+
+    return destination[0] == '\0' ? 0 : 1;
+}
+
+int main(int argc, char* argv[])
+{
+    if (argc < 2 || argc > 3)
+    {
+        const char* programName = argc > 0 && argv[0] != nullptr
+                                      ? argv[0]
+                                      : "OpenSLex";
+        std::cerr << "Usage: " << programName
+                  << " <input-file> [output-file]\n";
+        return static_cast<int>(ExitCode::UsageError);
+    }
+
+    const char* inputPath = argv[1];
+    const char* outputPath = argc == 3 ? argv[2] : "obfuscated_result.cl";
+
+    inputFile.open(inputPath);
+    if (!inputFile.is_open())
+    {
+        std::cerr << "Error: cannot open input file '" << inputPath << "'.\n";
+        return static_cast<int>(ExitCode::InputError);
+    }
+
+    std::ofstream outputFile(outputPath, std::ios::out | std::ios::trunc);
+    if (!outputFile.is_open())
+    {
+        std::cerr << "Error: cannot open output file '" << outputPath << "'.\n";
+        return static_cast<int>(ExitCode::InputError);
+    }
+
+    const ReadLineResult firstLine = getNextLine();
+    if (firstLine == ReadLineResult::Line)
+    {
+        if (yyparse() != 0)
+        {
+            syntaxError = true;
+        }
+    }
+
+    if (firstLine == ReadLineResult::Error || inputReadError)
+    {
+        std::cerr << "Error: failed to read input file '" << inputPath << "'.\n";
+        return static_cast<int>(ExitCode::InputError);
+    }
+
+    if (syntaxError)
+    {
+        return static_cast<int>(ExitCode::SyntaxError);
+    }
+
+    if (!obfuscator.writeResult(outputFile))
+    {
+        std::cerr << "Error: failed to write output file '" << outputPath << "'.\n";
+        return static_cast<int>(ExitCode::InputError);
+    }
+
+    std::cout << "PASS\n";
+    return static_cast<int>(ExitCode::Success);
 }

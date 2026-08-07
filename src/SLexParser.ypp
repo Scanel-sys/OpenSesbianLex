@@ -1,17 +1,14 @@
 %locations
+%error-verbose
 %{
     #include "TextHandler.hpp"
-
-    #define YYERROR_VERBOSE 1
 
     extern int yylineno;
     extern char * yytext;
     extern YYLTYPE yylloc;
     extern int yylex();
-    extern void AppendObfBuffer();
 
     extern int directives_ended;
-    extern int if_processing;
 
     extern void yyerror(const char *s) 
     {
@@ -40,8 +37,12 @@
 %token INT CHAR FLOAT DOUBLE SIZE_T
 %token GLOBAL LOCAL CONSTANT PRIVATE KERNEL
 %token INCR DECR PLUS_IS MIN_IS MUL_IS DIV_IS AND_IS OR_IS MOD_IS XOR_IS TILDA_IS
-%token UNSIGNED LONG SHORT 
+%token UNSIGNED LONG SHORT
 %token FLOAT_NUM
+%token INVALID_FLOAT "invalid floating-point literal"
+%token INVALID_STRING "invalid string literal"
+%token INVALID_COMMENT "unterminated block comment"
+%token '.'
 %%
 
 PRETYPES:

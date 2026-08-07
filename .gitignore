@@ -6,6 +6,11 @@ example
 src/*.tab.*
 src/lex.yy.c
 src/OpenSLex.exe
-*.cl
+/obfuscated_result.cl
 
 build
+CMakeFiles/
+CMakeCache.txt
+CTestTestfile.cmake
+cmake_install.cmake
+Testing/
