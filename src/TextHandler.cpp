@@ -24,7 +24,6 @@ extern int yylineno;
 // These flags are shared with the generated lexer/parser. They retain the
 // obfuscation state introduced on dev-obfuscator while the file handling and
 // diagnostics below use the safer C++ implementation from main.
-int directives_ended = 0;
 int if_processing = 0;
 int if_id = 0;
 int if_type = 0;
@@ -383,6 +382,63 @@ ReadLineResult getNextLine()
     return ReadLineResult::EndOfFile;
 }
 } // namespace
+
+int ClassifyPreprocessorDirective(const char* directive)
+{
+    if (directive == nullptr)
+    {
+        return PREPROCESSOR_DIRECTIVE;
+    }
+
+    const char* cursor = directive;
+    while (*cursor == ' ' || *cursor == '\t')
+    {
+        ++cursor;
+    }
+    if (*cursor != '#')
+    {
+        return PREPROCESSOR_DIRECTIVE;
+    }
+
+    ++cursor;
+    while (*cursor == ' ' || *cursor == '\t')
+    {
+        ++cursor;
+    }
+
+    const char* keywordStart = cursor;
+    while (std::isalpha(static_cast<unsigned char>(*cursor)) != 0)
+    {
+        ++cursor;
+    }
+    const std::string keyword(keywordStart, cursor);
+
+    if (keyword == "if")
+    {
+        return PREPROCESSOR_IF;
+    }
+    if (keyword == "ifdef")
+    {
+        return PREPROCESSOR_IFDEF;
+    }
+    if (keyword == "ifndef")
+    {
+        return PREPROCESSOR_IFNDEF;
+    }
+    if (keyword == "elif")
+    {
+        return PREPROCESSOR_ELIF;
+    }
+    if (keyword == "else")
+    {
+        return PREPROCESSOR_ELSE;
+    }
+    if (keyword == "endif")
+    {
+        return PREPROCESSOR_ENDIF;
+    }
+    return PREPROCESSOR_DIRECTIVE;
+}
 
 void PrintError(const char* message)
 {

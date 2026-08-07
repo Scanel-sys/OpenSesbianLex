@@ -9,12 +9,9 @@
       result = YY_NULL; \
     }
 
-    extern int directives_ended;
     extern int if_processing;
     extern int if_id;
     extern int if_type;
-
-    static int preprocessor_line = 0;
 %}
 
 %x STR
@@ -34,8 +31,14 @@ MALFORMED_DECIMAL_EXPONENT      ({DECIMAL_FRACTION}|{DIGIT}+)[eE][+-]?
 MALFORMED_HEXADECIMAL_EXPONENT  0[xX]({HEXADECIMAL_FRACTION}|{HEX_DIGIT}+)[pP][+-]?
 MALFORMED_HEXADECIMAL_FRACTION  0[xX]{HEXADECIMAL_FRACTION}
 MALFORMED_FLOAT                 ({MALFORMED_DECIMAL_EXPONENT}|{MALFORMED_HEXADECIMAL_EXPONENT}|{MALFORMED_HEXADECIMAL_FRACTION})
+PREPROCESSOR_DIRECTIVE          [ \t]*#[^\r\n]*(\\\r?\n[^\r\n]*)*
 
 %%
+
+<INITIAL>^{PREPROCESSOR_DIRECTIVE} {
+                    BeginToken(yytext);
+                    return ClassifyPreprocessorDirective(yytext);
+                  }
 
 <INITIAL>"//"[^\r\n]* {
                     /* Line comments are intentionally omitted from output. */
@@ -63,11 +66,6 @@ MALFORMED_FLOAT                 ({MALFORMED_DECIMAL_EXPONENT}|{MALFORMED_HEXADEC
                   }
 
 if              { if_processing = 1; BeginToken(yytext); return IF; }
-include         { preprocessor_line = 1; if_type = 1; BeginToken(yytext); return INCLUDE; }
-define          { preprocessor_line = 1; if_type = 1; BeginToken(yytext); return DEFINE; }
-ifdef           { preprocessor_line = 1; if_type = 1; BeginToken(yytext); return IFDEF; }
-ifndef          { preprocessor_line = 1; if_type = 1; BeginToken(yytext); return IFNDEF; }
-endif           { preprocessor_line = 1; if_type = 1; BeginToken(yytext); return ENDIF; }
 else            { BeginToken(yytext); return ELSE; }
 for             { BeginToken(yytext); return FOR; }
 while           { BeginToken(yytext); return WHILE; }
@@ -214,7 +212,7 @@ __kernel        { if_type = 1; BeginToken(yytext); return KERNEL; }
                   }
 
 [ \r\t]         {
-                    if (if_type != 0 || preprocessor_line != 0)
+                    if (if_type != 0)
                     {
                         BeginToken(yytext);
                     }
@@ -224,7 +222,6 @@ __kernel        { if_type = 1; BeginToken(yytext); return KERNEL; }
 \n                {
                     BeginToken(yytext);
                     if_type = 0;
-                    preprocessor_line = 0;
                   }
 
 "-="            { BeginToken(yytext); return MIN_IS; }

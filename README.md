@@ -166,6 +166,21 @@ side-effect-free opaque-false branch into braced `if` statements, and replaces
 supported punctuators with C digraphs or trigraphs. The opaque predicate uses
 only unsigned arithmetic and never evaluates the original condition again.
 
+## Preprocessor directives
+
+C99/OpenCL preprocessing directives are recognized only when `#` is the first
+non-whitespace character of a logical line. The obfuscator preserves `#if`,
+`#ifdef`, `#ifndef`, `#elif`, `#else`, `#endif`, `#define`, `#undef`, `#include`,
+and `#pragma` directives without rewriting their preprocessing tokens.
+Backslash-continued definitions, object-like expressions, variadic parameters,
+stringizing (`#`) and token pasting (`##`) are retained. Conditional groups may
+be nested and their pairing is validated. Words such as `define`, `include`,
+and `ifdef` remain ordinary identifiers outside directive lines.
+
+Macros are preserved rather than expanded by OpenSLex. User symbols referenced
+from a macro replacement list are conservatively kept unchanged so that the
+preserved macro remains valid after obfuscation.
+
 ## Exit codes
 
 - `0` — parsing succeeded

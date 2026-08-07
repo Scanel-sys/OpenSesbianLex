@@ -123,6 +123,7 @@ public:
             {
                 originalIdentifiers_.insert(token.text);
             }
+            collectPreprocessorReferences(token.text);
         }
 
         buildSemanticTokens();
@@ -142,7 +143,9 @@ public:
              symbolIndex < symbols_.size();
              ++symbolIndex)
         {
-            if (!symbols_[symbolIndex].renameable)
+            if (!symbols_[symbolIndex].renameable ||
+                preprocessorReferences_.find(symbols_[symbolIndex].name) !=
+                    preprocessorReferences_.end())
             {
                 continue;
             }
@@ -179,6 +182,108 @@ private:
     std::vector<Structure> structures_;
     std::set<std::string> originalIdentifiers_;
     std::set<std::string> generatedNames_;
+    std::set<std::string> preprocessorReferences_;
+
+    static bool isIdentifierStart(char character)
+    {
+        const unsigned char value = static_cast<unsigned char>(character);
+        return std::isalpha(value) != 0 || character == '_';
+    }
+
+    static bool isIdentifierContinuation(char character)
+    {
+        const unsigned char value = static_cast<unsigned char>(character);
+        return std::isalnum(value) != 0 || character == '_';
+    }
+
+    static void skipHorizontalWhitespace(
+        const std::string& text,
+        std::size_t& cursor)
+    {
+        while (cursor < text.size() &&
+               (text[cursor] == ' ' || text[cursor] == '\t'))
+        {
+            ++cursor;
+        }
+    }
+
+    static std::string readIdentifier(
+        const std::string& text,
+        std::size_t& cursor)
+    {
+        if (cursor >= text.size() || !isIdentifierStart(text[cursor]))
+        {
+            return std::string();
+        }
+        const std::size_t start = cursor++;
+        while (cursor < text.size() &&
+               isIdentifierContinuation(text[cursor]))
+        {
+            ++cursor;
+        }
+        return text.substr(start, cursor - start);
+    }
+
+    void collectPreprocessorReferences(const std::string& text)
+    {
+        std::size_t cursor = 0;
+        skipHorizontalWhitespace(text, cursor);
+        if (cursor >= text.size() || text[cursor] != '#')
+        {
+            return;
+        }
+
+        ++cursor;
+        skipHorizontalWhitespace(text, cursor);
+        if (readIdentifier(text, cursor) != "define")
+        {
+            return;
+        }
+
+        skipHorizontalWhitespace(text, cursor);
+        const std::string macroName = readIdentifier(text, cursor);
+        if (macroName.empty())
+        {
+            return;
+        }
+
+        std::set<std::string> macroParameters;
+        if (cursor < text.size() && text[cursor] == '(')
+        {
+            ++cursor;
+            while (cursor < text.size() && text[cursor] != ')')
+            {
+                if (isIdentifierStart(text[cursor]))
+                {
+                    macroParameters.insert(readIdentifier(text, cursor));
+                }
+                else
+                {
+                    ++cursor;
+                }
+            }
+            if (cursor < text.size())
+            {
+                ++cursor;
+            }
+        }
+
+        macroParameters.insert("__VA_ARGS__");
+        while (cursor < text.size())
+        {
+            if (!isIdentifierStart(text[cursor]))
+            {
+                ++cursor;
+                continue;
+            }
+            const std::string identifier = readIdentifier(text, cursor);
+            if (identifier != macroName &&
+                macroParameters.find(identifier) == macroParameters.end())
+            {
+                preprocessorReferences_.insert(identifier);
+            }
+        }
+    }
 
     void buildSemanticTokens()
     {
