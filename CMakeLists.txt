@@ -4,6 +4,12 @@ project(OpenSesbianLex VERSION 1.0.0 LANGUAGES CXX)
 
 include(CTest)
 
+option(
+    OPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS
+    "Build tests that execute original and obfuscated kernels via OpenCL"
+    OFF
+)
+
 # GNU tools are usually named bison/flex. WinFlexBison uses
 # win_bison/win_flex, so accept both without hard-coded install paths.
 find_program(BISON_EXECUTABLE NAMES bison win_bison DOC "Bison executable")
@@ -72,6 +78,42 @@ endif()
 install(TARGETS OpenSLex RUNTIME DESTINATION bin)
 
 if(BUILD_TESTING)
+    set(OPEN_SLEX_BEHAVIOR_SOURCE
+        "${CMAKE_CURRENT_SOURCE_DIR}/tests/behavior_program.cpp"
+    )
+    set(OPEN_SLEX_BEHAVIOR_OBFUSCATED_SOURCE
+        "${CMAKE_CURRENT_BINARY_DIR}/test-inputs/behavior_program_obfuscated.cpp"
+    )
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test-inputs")
+
+    add_custom_command(
+        OUTPUT "${OPEN_SLEX_BEHAVIOR_OBFUSCATED_SOURCE}"
+        COMMAND
+            "$<TARGET_FILE:OpenSLex>"
+            "${OPEN_SLEX_BEHAVIOR_SOURCE}"
+            "${OPEN_SLEX_BEHAVIOR_OBFUSCATED_SOURCE}"
+        DEPENDS OpenSLex "${OPEN_SLEX_BEHAVIOR_SOURCE}"
+        COMMENT "Obfuscating the behavior-equivalence test program"
+        VERBATIM
+    )
+
+    add_executable(
+        OpenSLexBehaviorOriginal
+        "${OPEN_SLEX_BEHAVIOR_SOURCE}"
+    )
+    add_executable(
+        OpenSLexBehaviorObfuscated
+        "${OPEN_SLEX_BEHAVIOR_OBFUSCATED_SOURCE}"
+    )
+    target_compile_features(OpenSLexBehaviorOriginal PRIVATE cxx_std_14)
+    target_compile_features(OpenSLexBehaviorObfuscated PRIVATE cxx_std_14)
+
+    if(MSVC)
+        target_compile_options(OpenSLexBehaviorObfuscated PRIVATE /Zc:trigraphs)
+    elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        target_compile_options(OpenSLexBehaviorObfuscated PRIVATE -trigraphs)
+    endif()
+
     function(add_parser_file_test test_name input_file expected_exit_code)
         set(extra_test_arguments)
         if(ARGC GREATER 3)
@@ -213,6 +255,56 @@ if(BUILD_TESTING)
         opencl.obfuscation.smoke
         PROPERTIES LABELS "opencl;obfuscation" TIMEOUT 10
     )
+
+    add_test(
+        NAME obfuscation.behavior_equivalence
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-DORIGINAL_PROGRAM=$<TARGET_FILE:OpenSLexBehaviorOriginal>"
+            "-DOBFUSCATED_PROGRAM=$<TARGET_FILE:OpenSLexBehaviorObfuscated>"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CompareProgramBehavior.cmake"
+    )
+    set_tests_properties(
+        obfuscation.behavior_equivalence
+        PROPERTIES LABELS "obfuscation;semantic" TIMEOUT 10
+    )
+
+    if(OPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS)
+        find_package(OpenCL REQUIRED)
+
+        add_executable(
+            OpenSLexOpenCLSemanticRunner
+            tests/OpenCLSemanticRunner.cpp
+        )
+        target_compile_features(OpenSLexOpenCLSemanticRunner PRIVATE cxx_std_11)
+        target_link_libraries(OpenSLexOpenCLSemanticRunner PRIVATE OpenCL::OpenCL)
+        if(MSVC)
+            target_compile_options(OpenSLexOpenCLSemanticRunner PRIVATE /W4)
+        elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+            target_compile_options(
+                OpenSLexOpenCLSemanticRunner
+                PRIVATE -Wall -Wextra
+            )
+        endif()
+
+        set(OPEN_SLEX_OPENCL_SEMANTIC_OUTPUT
+            "${OPEN_SLEX_GENERATED_TEST_DIR}/opencl-semantic-obfuscated.cl"
+        )
+        add_test(
+            NAME opencl.obfuscation.runtime_equivalence
+            COMMAND
+                "${CMAKE_COMMAND}"
+                "-DPARSER=$<TARGET_FILE:OpenSLex>"
+                "-DRUNNER=$<TARGET_FILE:OpenSLexOpenCLSemanticRunner>"
+                "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_semantic_kernel.cl"
+                "-DOUTPUT=${OPEN_SLEX_OPENCL_SEMANTIC_OUTPUT}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunOpenCLSemanticTest.cmake"
+        )
+        set_tests_properties(
+            opencl.obfuscation.runtime_equivalence
+            PROPERTIES LABELS "opencl;obfuscation;semantic" TIMEOUT 60
+        )
+    endif()
 
     add_test(
         NAME cli.missing_argument

@@ -82,9 +82,21 @@ Windows and `build/OpenSLex` on Linux.
 ## Test
 
 CTest runs the valid C/OpenCL inputs and verifies that invalid C inputs return
-the expected error exit code:
+the expected error exit code. It also compiles and runs an original C++
+program and its obfuscated version, then compares their results:
 
 ```sh
+ctest --test-dir build --output-on-failure
+```
+
+The Linux GitHub Actions job additionally installs the PoCL CPU runtime and
+runs both the original and obfuscated OpenCL kernels with the same input. It
+checks that both kernels build successfully and produce identical results.
+To enable this test locally on a system with an OpenCL SDK and runtime:
+
+```sh
+cmake -S . -B build -DOPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS=ON
+cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 

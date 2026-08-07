@@ -16,10 +16,19 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes bison flex g++ ninja-build
+          sudo apt-get install --yes \
+            bison \
+            flex \
+            g++ \
+            ninja-build \
+            ocl-icd-opencl-dev \
+            pocl-opencl-icd
 
       - name: Configure
-        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+        run: >-
+          cmake -S . -B build -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DOPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS=ON
 
       - name: Build
         run: cmake --build build
