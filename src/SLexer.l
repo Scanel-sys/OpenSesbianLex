@@ -20,6 +20,11 @@
 
 DIGIT                           [0-9]
 HEX_DIGIT                       [0-9a-fA-F]
+INTEGER_SUFFIX                  ([uU]([lL]{1,2})?|[lL]{1,2}[uU]?)
+DECIMAL_INTEGER                 ([1-9]{DIGIT}*|0){INTEGER_SUFFIX}?
+OCTAL_INTEGER                   0[0-7]+{INTEGER_SUFFIX}?
+HEXADECIMAL_INTEGER             0[xX]{HEX_DIGIT}+{INTEGER_SUFFIX}?
+INTEGER_LITERAL                 ({HEXADECIMAL_INTEGER}|{OCTAL_INTEGER}|{DECIMAL_INTEGER})
 DECIMAL_EXPONENT                [eE][+-]?{DIGIT}+
 BINARY_EXPONENT                 [pP][+-]?{DIGIT}+
 FLOAT_SUFFIX                    [fFlLhH]
@@ -31,6 +36,7 @@ MALFORMED_DECIMAL_EXPONENT      ({DECIMAL_FRACTION}|{DIGIT}+)[eE][+-]?
 MALFORMED_HEXADECIMAL_EXPONENT  0[xX]({HEXADECIMAL_FRACTION}|{HEX_DIGIT}+)[pP][+-]?
 MALFORMED_HEXADECIMAL_FRACTION  0[xX]{HEXADECIMAL_FRACTION}
 MALFORMED_FLOAT                 ({MALFORMED_DECIMAL_EXPONENT}|{MALFORMED_HEXADECIMAL_EXPONENT}|{MALFORMED_HEXADECIMAL_FRACTION})
+CHARACTER_LITERAL               \'([^\\'\r\n]|\\([\'"?\\abfnrtv]|[0-7]{1,3}|x{HEX_DIGIT}+|u{HEX_DIGIT}{4}|U{HEX_DIGIT}{8}))+\'
 PREPROCESSOR_DIRECTIVE          [ \t]*#[^\r\n]*(\\\r?\n[^\r\n]*)*
 
 %%
@@ -70,10 +76,14 @@ else            { BeginToken(yytext); return ELSE; }
 for             { BeginToken(yytext); return FOR; }
 while           { BeginToken(yytext); return WHILE; }
 do              { BeginToken(yytext); return DO; }
+switch          { BeginToken(yytext); return SWITCH; }
+case            { BeginToken(yytext); return CASE; }
+default         { BeginToken(yytext); return DEFAULT; }
 return          { if_type = 1; BeginToken(yytext); return RETURN; }
 print           { BeginToken(yytext); return PRINT; }
 break           { BeginToken(yytext); return BREAK; }
 continue        { BeginToken(yytext); return CONTINUE; }
+sizeof          { BeginToken(yytext); return SIZEOF; }
 int             { if_type = 1; BeginToken(yytext); return INT; }
 char            { if_type = 1; BeginToken(yytext); return CHAR; }
 bool            { if_type = 1; BeginToken(yytext); return INT; }
@@ -95,14 +105,43 @@ long            { if_type = 1; BeginToken(yytext); return LONG; }
 short           { if_type = 1; BeginToken(yytext); return SHORT; }
 void            { if_type = 1; BeginToken(yytext); return VOID; }
 typedef         { if_type = 1; BeginToken(yytext); return TYPEDEF; }
+enum            { if_type = 1; BeginToken(yytext); return ENUM; }
 union           { if_type = 1; BeginToken(yytext); return UNION; }
 struct          { if_type = 1; BeginToken(yytext); return STRUCT; }
-__global        { if_type = 1; BeginToken(yytext); return GLOBAL; }
-__local         { if_type = 1; BeginToken(yytext); return LOCAL; }
-__constant      { if_type = 1; BeginToken(yytext); return CONSTANT; }
-__private       { if_type = 1; BeginToken(yytext); return PRIVATE; }
-__kernel        { if_type = 1; BeginToken(yytext); return KERNEL; }
+volatile        { if_type = 1; BeginToken(yytext); return VOLATILE; }
+restrict        { if_type = 1; BeginToken(yytext); return RESTRICT; }
+(read_only|write_only|read_write|__read_only|__write_only|__read_write) {
+                    if_type = 1; BeginToken(yytext); return ACCESS_QUAL;
+                  }
+(image1d_t|image1d_buffer_t|image1d_array_t|image2d_t|image2d_array_t|image3d_t|sampler_t|event_t|clk_event_t|queue_t|reserve_id_t) {
+                    if_type = 1; BeginToken(yytext); return BUILTIN_TYPE;
+                  }
+(__global|global) { if_type = 1; BeginToken(yytext); return GLOBAL; }
+(__local|local) { if_type = 1; BeginToken(yytext); return LOCAL; }
+(__constant|constant) { if_type = 1; BeginToken(yytext); return CONSTANT; }
+(__private|private) { if_type = 1; BeginToken(yytext); return PRIVATE; }
+(__kernel|kernel) { if_type = 1; BeginToken(yytext); return KERNEL; }
+(__attribute__|__attribute) { BeginToken(yytext); return ATTRIBUTE; }
 
+"<:"            { BeginToken(yytext); return '['; }
+":>"            { BeginToken(yytext); return ']'; }
+"<%"            { BeginToken(yytext); return '{'; }
+"%>"            { BeginToken(yytext); return '}'; }
+"%:"            { BeginToken(yytext); return '#'; }
+[?][?][(]       { BeginToken(yytext); return '['; }
+[?][?][)]       { BeginToken(yytext); return ']'; }
+[?][?][<]       { BeginToken(yytext); return '{'; }
+[?][?][>]       { BeginToken(yytext); return '}'; }
+[?][?][=]       { BeginToken(yytext); return '#'; }
+[?][?][/]       { BeginToken(yytext); return '\\'; }
+[?][?][']       { BeginToken(yytext); return '^'; }
+[?][?][!]       { BeginToken(yytext); return '|'; }
+[?][?][-]       { BeginToken(yytext); return '~'; }
+
+"<<="           { BeginToken(yytext); return LEFT_IS; }
+">>="           { BeginToken(yytext); return RIGHT_IS; }
+"<<"            { BeginToken(yytext); return LEFT_SHIFT; }
+">>"            { BeginToken(yytext); return RIGHT_SHIFT; }
 ==              { BeginToken(yytext); return EQ; }
 "<="            { BeginToken(yytext); return LE; }
 >=              { BeginToken(yytext); return GE; }
@@ -120,10 +159,14 @@ __kernel        { if_type = 1; BeginToken(yytext); return KERNEL; }
                   return INVALID_FLOAT;
                 }
 
-{DIGIT}         {
+{INTEGER_LITERAL} {
                   BeginToken(yytext);
-                  yylval = (int)*yytext;
-                  return DIGIT;
+                  return INTEGER_LITERAL;
+                }
+
+{CHARACTER_LITERAL} {
+                  BeginToken(yytext);
+                  return CHARACTER_LITERAL;
                 }
 
 <INITIAL>[\"]   {
@@ -231,7 +274,6 @@ __kernel        { if_type = 1; BeginToken(yytext); return KERNEL; }
 "|="            { BeginToken(yytext); return OR_IS; }
 "%="            { BeginToken(yytext); return MOD_IS; }
 "^="            { BeginToken(yytext); return XOR_IS; }
-"~="            { BeginToken(yytext); return TILDA_IS; }
 "+="            { BeginToken(yytext); return PLUS_IS; }
 "++"            { BeginToken(yytext); return INCR; }
 "--"            { BeginToken(yytext); return DECR; }

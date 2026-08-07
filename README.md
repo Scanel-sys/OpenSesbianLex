@@ -131,6 +131,12 @@ Run the same suite through Oclgrind with:
 docker build --progress=plain --target test-oclgrind -t openslex-test-oclgrind .
 ```
 
+Run the host-code ASan/UBSan suite and a bounded libFuzzer campaign with:
+
+```sh
+docker build --progress=plain --target test-sanitizers -t openslex-test-sanitizers .
+```
+
 The default target is PoCL, so `docker build .` also runs the PoCL suite. A
 failed CMake build or CTest test makes `docker build` return a nonzero exit
 code.
@@ -180,6 +186,31 @@ and `ifdef` remain ordinary identifiers outside directive lines.
 Macros are preserved rather than expanded by OpenSLex. User symbols referenced
 from a macro replacement list are conservatively kept unchanged so that the
 preserved macro remains valid after obfuscation.
+
+## Reproducible obfuscation seeds
+
+Pass an unsigned 32-bit seed to reproduce a particular set of generated names
+and opaque-predicate constants:
+
+```sh
+OpenSLex --seed 12345 input.cl output.cl
+```
+
+The same source and seed produce the same output. Regression tests exercise
+several distinct seeds and reparse every generated source file.
+
+## Sanitizers and fuzzing
+
+GCC or Clang host builds can enable AddressSanitizer and
+UndefinedBehaviorSanitizer with `-DOPEN_SLEX_ENABLE_SANITIZERS=ON`. With Clang,
+`-DOPEN_SLEX_BUILD_FUZZER=ON` also builds `OpenSLexFuzzer`, which passes
+arbitrary byte sequences directly through the Flex lexer and Bison parser.
+The Linux CI job runs the full regression suite under ASan/UBSan and a bounded
+fuzz smoke test. A longer local campaign can be started with:
+
+```sh
+./build-sanitized/OpenSLexFuzzer -max_total_time=600 fuzz/corpus
+```
 
 ## Exit codes
 

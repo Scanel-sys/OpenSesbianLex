@@ -3,6 +3,7 @@
 #include "IdentifierResolver.hpp"
 
 #include <algorithm>
+#include <cerrno>
 #include <cctype>
 #include <cstddef>
 #include <cstdint>
@@ -51,6 +52,7 @@ std::string lineBuffer;
 bool endOfFile = false;
 bool inputReadError = false;
 bool syntaxError = false;
+bool suppressDiagnostics = false;
 
 int currentRow = 0;
 std::size_t bufferOffset = 0;
@@ -97,6 +99,11 @@ private:
 class Obfuscator
 {
 public:
+    void setSeed(std::uint32_t seed)
+    {
+        seed_ = seed == 0 ? 0x6d2b79f5u : seed;
+    }
+
     void processToken(const char* token, bool isIdentifier)
     {
         const std::string tokenText(token);
@@ -173,6 +180,7 @@ private:
 
     std::size_t ifBodyStart_ = 0;
     std::uint32_t opaquePredicateIndex_ = 0;
+    std::uint32_t seed_ = 0x9e3779b9u;
 
     static bool isIdentifierCharacter(char character)
     {
@@ -224,7 +232,7 @@ private:
         // overflow. The predicate is therefore always false and does not read
         // or evaluate anything from the user's original condition.
         const std::uint32_t seed =
-            0x9e3779b9u ^ (opaquePredicateIndex_ * 0x85ebca6bu);
+            seed_ ^ (opaquePredicateIndex_ * 0x85ebca6bu);
         const std::uint32_t payloadLeft = seed ^ 0xa5a5a5a5u;
         const std::uint32_t payloadRight = seed ^ 0x5a5a5a5au;
         ++opaquePredicateIndex_;
@@ -264,7 +272,7 @@ private:
     void obfuscateIdentifiers()
     {
         const std::vector<std::string> replacements =
-            ResolveIdentifierNames(sourceTokens_);
+            ResolveIdentifierNames(sourceTokens_, seed_);
 
         for (ObfuscationToken& token : outputTokens_)
         {
@@ -381,6 +389,31 @@ ReadLineResult getNextLine()
     endOfFile = true;
     return ReadLineResult::EndOfFile;
 }
+
+bool parseSeed(const char* text, std::uint32_t& seed)
+{
+    if (text == nullptr || *text == '\0' || *text == '-')
+    {
+        return false;
+    }
+
+    errno = 0;
+    char* end = nullptr;
+    const unsigned long long parsed = std::strtoull(text, &end, 0);
+    if (errno != 0 || end == text || *end != '\0' ||
+        parsed > std::numeric_limits<std::uint32_t>::max())
+    {
+        return false;
+    }
+    seed = static_cast<std::uint32_t>(parsed);
+    return true;
+}
+
+void printUsage(const char* programName)
+{
+    std::cerr << "Usage: " << programName
+              << " [--seed <uint32>] <input-file> [output-file]\n";
+}
 } // namespace
 
 int ClassifyPreprocessorDirective(const char* directive)
@@ -443,6 +476,10 @@ int ClassifyPreprocessorDirective(const char* directive)
 void PrintError(const char* message)
 {
     syntaxError = true;
+    if (suppressDiagnostics)
+    {
+        return;
+    }
     const std::size_t markerLength = std::max<std::size_t>(tokenLength, 1);
 
     std::cerr << "...... !";
@@ -465,6 +502,10 @@ void PrintError(const char* message)
 
 void DumpRow()
 {
+    if (suppressDiagnostics)
+    {
+        return;
+    }
     if (!syntaxError)
     {
         std::cerr << "\nError(s) occurred while parsing:\n\n";
@@ -536,20 +577,64 @@ int GetNextChar(char* destination, int maxBuffer)
     return destination[0] == '\0' ? 0 : 1;
 }
 
+#ifdef OPEN_SLEX_NO_MAIN
+void ResetOpenSLexFrontendForFuzzing()
+{
+    if (inputFile.is_open())
+    {
+        inputFile.close();
+    }
+    inputFile.clear();
+    lineBuffer.clear();
+    endOfFile = false;
+    inputReadError = false;
+    syntaxError = false;
+    suppressDiagnostics = true;
+    currentRow = 1;
+    bufferOffset = 0;
+    tokenStart = 0;
+    tokenLength = 0;
+    nextTokenStart = 0;
+    if_processing = 0;
+    if_id = 0;
+    if_type = 0;
+    yylineno = 1;
+    obfuscator = Obfuscator{};
+}
+#else
 int main(int argc, char* argv[])
 {
-    if (argc < 2 || argc > 3)
+    const char* programName = argc > 0 && argv[0] != nullptr
+                                  ? argv[0]
+                                  : "OpenSLex";
+    int argumentIndex = 1;
+    std::uint32_t seed = 0x9e3779b9u;
+
+    if (argumentIndex < argc &&
+        std::strcmp(argv[argumentIndex], "--seed") == 0)
     {
-        const char* programName = argc > 0 && argv[0] != nullptr
-                                      ? argv[0]
-                                      : "OpenSLex";
-        std::cerr << "Usage: " << programName
-                  << " <input-file> [output-file]\n";
+        if (argumentIndex + 1 >= argc ||
+            !parseSeed(argv[argumentIndex + 1], seed))
+        {
+            std::cerr << "Error: --seed requires an unsigned 32-bit value.\n";
+            printUsage(programName);
+            return static_cast<int>(ExitCode::UsageError);
+        }
+        argumentIndex += 2;
+    }
+
+    const int positionalCount = argc - argumentIndex;
+    if (positionalCount < 1 || positionalCount > 2)
+    {
+        printUsage(programName);
         return static_cast<int>(ExitCode::UsageError);
     }
 
-    const char* inputPath = argv[1];
-    const char* outputPath = argc == 3 ? argv[2] : "obfuscated_result.cl";
+    const char* inputPath = argv[argumentIndex];
+    const char* outputPath = positionalCount == 2
+        ? argv[argumentIndex + 1]
+        : "obfuscated_result.cl";
+    obfuscator.setSeed(seed);
 
     inputFile.open(inputPath);
     if (!inputFile.is_open())
@@ -599,3 +684,4 @@ int main(int argc, char* argv[])
     std::cout << "PASS\n";
     return static_cast<int>(ExitCode::Success);
 }
+#endif

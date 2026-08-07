@@ -78,3 +78,31 @@ jobs:
       - name: Test
         shell: msys2 {0}
         run: ctest --test-dir build --output-on-failure
+
+  linux-sanitizers-fuzz:
+    name: Linux ASan/UBSan + fuzz smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes bison clang flex ninja-build
+
+      - name: Configure
+        run: >-
+          cmake -S . -B build-sanitized -G Ninja
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DCMAKE_CXX_COMPILER=clang++
+          -DOPEN_SLEX_ENABLE_SANITIZERS=ON
+          -DOPEN_SLEX_BUILD_FUZZER=ON
+
+      - name: Build
+        run: cmake --build build-sanitized
+
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: ctest --test-dir build-sanitized --output-on-failure

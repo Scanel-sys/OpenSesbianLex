@@ -19,3 +19,4 @@ int GetNextChar(char* destination, int maxBuffer);
 void BeginToken(const char* token);
 int ClassifyPreprocessorDirective(const char* directive);
 void PrintError(const char* message);
+void ResetOpenSLexFrontendForFuzzing();

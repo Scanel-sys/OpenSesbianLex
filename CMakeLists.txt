@@ -9,6 +9,16 @@ option(
     "Build tests that execute original and obfuscated kernels via OpenCL"
     OFF
 )
+option(
+    OPEN_SLEX_ENABLE_SANITIZERS
+    "Enable AddressSanitizer and UndefinedBehaviorSanitizer for host code"
+    OFF
+)
+option(
+    OPEN_SLEX_BUILD_FUZZER
+    "Build the Clang libFuzzer target for the lexer and parser"
+    OFF
+)
 set(
     OPEN_SLEX_OPENCL_RUNTIME_LAUNCHER
     ""
@@ -75,6 +85,27 @@ target_include_directories(
         "${OPEN_SLEX_GENERATED_DIR}"
 )
 
+function(open_slex_enable_sanitizers target_name)
+    if(NOT OPEN_SLEX_ENABLE_SANITIZERS)
+        return()
+    endif()
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        message(FATAL_ERROR
+            "OPEN_SLEX_ENABLE_SANITIZERS requires GCC or Clang"
+        )
+    endif()
+    target_compile_options(
+        "${target_name}"
+        PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer
+    )
+    target_link_options(
+        "${target_name}"
+        PRIVATE -fsanitize=address,undefined -fno-omit-frame-pointer
+    )
+endfunction()
+
+open_slex_enable_sanitizers(OpenSLex)
+
 if(MSVC)
     target_compile_options(OpenSLex PRIVATE /W4)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -83,6 +114,48 @@ endif()
 
 if(UNIX)
     target_link_libraries(OpenSLex PRIVATE m)
+endif()
+
+if(OPEN_SLEX_BUILD_FUZZER)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+        message(FATAL_ERROR "OPEN_SLEX_BUILD_FUZZER requires Clang")
+    endif()
+
+    add_executable(
+        OpenSLexFuzzer
+        fuzz/FuzzOpenSLex.cpp
+        src/IdentifierResolver.cpp
+        src/IdentifierResolver.hpp
+        src/TextHandler.cpp
+        src/TextHandler.hpp
+        ${BISON_OpenSLexParser_OUTPUTS}
+        ${FLEX_OpenSLexLexer_OUTPUTS}
+    )
+    target_compile_features(OpenSLexFuzzer PRIVATE cxx_std_11)
+    target_compile_definitions(OpenSLexFuzzer PRIVATE OPEN_SLEX_NO_MAIN=1)
+    target_include_directories(
+        OpenSLexFuzzer
+        PRIVATE
+            "${CMAKE_CURRENT_SOURCE_DIR}/src"
+            "${OPEN_SLEX_GENERATED_DIR}"
+    )
+    target_compile_options(
+        OpenSLexFuzzer
+        PRIVATE
+            -Wall
+            -Wextra
+            -fsanitize=fuzzer,address,undefined
+            -fno-omit-frame-pointer
+    )
+    target_link_options(
+        OpenSLexFuzzer
+        PRIVATE
+            -fsanitize=fuzzer,address,undefined
+            -fno-omit-frame-pointer
+    )
+    if(UNIX)
+        target_link_libraries(OpenSLexFuzzer PRIVATE m)
+    endif()
 endif()
 
 install(TARGETS OpenSLex RUNTIME DESTINATION bin)
@@ -117,6 +190,8 @@ if(BUILD_TESTING)
     )
     target_compile_features(OpenSLexBehaviorOriginal PRIVATE cxx_std_14)
     target_compile_features(OpenSLexBehaviorObfuscated PRIVATE cxx_std_14)
+    open_slex_enable_sanitizers(OpenSLexBehaviorOriginal)
+    open_slex_enable_sanitizers(OpenSLexBehaviorObfuscated)
 
     if(MSVC)
         target_compile_options(OpenSLexBehaviorObfuscated PRIVATE /Zc:trigraphs)
@@ -188,6 +263,7 @@ if(BUILD_TESTING)
     add_parser_test(opencl.valid.semantic_features tests/opencl_semantic_kernel.cl 0)
     add_parser_test(opencl.valid.comment_boundaries tests/opencl_comment_boundaries.cl 0)
     add_parser_test(opencl.valid.preprocessor tests/opencl_preprocessor.cl 0)
+    add_parser_test(opencl.valid.language_coverage tests/opencl_language_coverage.cl 0)
     add_parser_test(
         opencl.invalid.preprocessor_unmatched
         tests/FALSE_preprocessor_unmatched.cl
@@ -349,6 +425,37 @@ if(BUILD_TESTING)
         PROPERTIES LABELS "opencl;obfuscation;preprocessor" TIMEOUT 10
     )
 
+    set(OPEN_SLEX_LANGUAGE_COVERAGE_OUTPUT
+        "${OPEN_SLEX_GENERATED_TEST_DIR}/language-coverage-obfuscated.cl"
+    )
+    add_test(
+        NAME opencl.obfuscation.language_coverage
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-DPARSER=$<TARGET_FILE:OpenSLex>"
+            "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_language_coverage.cl"
+            "-DOUTPUT=${OPEN_SLEX_LANGUAGE_COVERAGE_OUTPUT}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunLanguageCoverageTest.cmake"
+    )
+    set_tests_properties(
+        opencl.obfuscation.language_coverage
+        PROPERTIES LABELS "opencl;obfuscation;language" TIMEOUT 10
+    )
+
+    add_test(
+        NAME opencl.obfuscation.seeds
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-DPARSER=$<TARGET_FILE:OpenSLex>"
+            "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_language_coverage.cl"
+            "-DWORK_DIR=${OPEN_SLEX_GENERATED_TEST_DIR}/seeds"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunSeedTest.cmake"
+    )
+    set_tests_properties(
+        opencl.obfuscation.seeds
+        PROPERTIES LABELS "opencl;obfuscation;seed" TIMEOUT 20
+    )
+
     set(OPEN_SLEX_COMMENT_BOUNDARY_OUTPUT
         "${OPEN_SLEX_GENERATED_TEST_DIR}/comment-boundaries-obfuscated.cl"
     )
@@ -388,6 +495,7 @@ if(BUILD_TESTING)
         )
         target_compile_features(OpenSLexOpenCLSemanticRunner PRIVATE cxx_std_11)
         target_link_libraries(OpenSLexOpenCLSemanticRunner PRIVATE OpenCL::OpenCL)
+        open_slex_enable_sanitizers(OpenSLexOpenCLSemanticRunner)
         if(MSVC)
             target_compile_options(OpenSLexOpenCLSemanticRunner PRIVATE /W4)
         elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -427,6 +535,7 @@ if(BUILD_TESTING)
         )
         list(APPEND OPEN_SLEX_OPENCL_EXAMPLES
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_comment_boundaries.cl"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_language_coverage.cl"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_opaque_predicate.cl"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_preprocessor.cl"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_symbol_scopes.cl"
@@ -501,6 +610,20 @@ if(BUILD_TESTING)
         PROPERTIES LABELS "cli;invalid" TIMEOUT 10
     )
 
+    if(OPEN_SLEX_BUILD_FUZZER)
+        add_test(
+            NAME fuzz.frontend.smoke
+            COMMAND
+                "$<TARGET_FILE:OpenSLexFuzzer>"
+                -runs=2000
+                "${CMAKE_CURRENT_SOURCE_DIR}/fuzz/corpus"
+        )
+        set_tests_properties(
+            fuzz.frontend.smoke
+            PROPERTIES LABELS "fuzz;lexer;parser" TIMEOUT 60
+        )
+    endif()
+
     set_tests_properties(
         c.valid.array
         c.valid.directives
@@ -532,6 +655,7 @@ if(BUILD_TESTING)
         opencl.valid.semantic_features
         opencl.valid.comment_boundaries
         opencl.valid.preprocessor
+        opencl.valid.language_coverage
         opencl.valid.line_comment_at_eof
         PROPERTIES LABELS "opencl;valid"
     )

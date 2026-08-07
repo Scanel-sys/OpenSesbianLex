@@ -51,5 +51,26 @@ RUN cmake -S . -B build -G Ninja \
     && cmake --build build \
     && ctest --test-dir build --output-on-failure
 
+FROM opencl-test-base AS sanitizer-base
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        clang \
+    && rm -rf /var/lib/apt/lists/*
+
+FROM sanitizer-base AS test-sanitizers
+
+COPY . .
+
+RUN cmake -S . -B build-sanitized -G Ninja \
+        -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+        -DCMAKE_CXX_COMPILER=clang++ \
+        -DOPEN_SLEX_ENABLE_SANITIZERS=ON \
+        -DOPEN_SLEX_BUILD_FUZZER=ON \
+    && cmake --build build-sanitized \
+    && ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+       UBSAN_OPTIONS=halt_on_error=1:print_stacktrace=1 \
+       ctest --test-dir build-sanitized --output-on-failure
+
 # Running `docker build .` without --target uses the faster PoCL test target.
 FROM test-pocl AS test

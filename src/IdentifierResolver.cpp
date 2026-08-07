@@ -2,7 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
-#include <cstdlib>
+#include <cstdint>
 #include <limits>
 #include <map>
 #include <set>
@@ -112,10 +112,13 @@ bool hasSuffix(const std::string& text, const std::string& suffix)
 class Resolver
 {
 public:
-    explicit Resolver(const std::vector<IdentifierSourceToken>& sourceTokens)
+    Resolver(
+        const std::vector<IdentifierSourceToken>& sourceTokens,
+        std::uint32_t seed)
         : sourceTokens_(sourceTokens),
           bindingBySource_(sourceTokens.size(), noIndex),
-          protectedSource_(sourceTokens.size(), false)
+          protectedSource_(sourceTokens.size(), false),
+          randomState_(seed == 0 ? 0x6d2b79f5u : seed)
     {
         for (const IdentifierSourceToken& token : sourceTokens_)
         {
@@ -183,6 +186,7 @@ private:
     std::set<std::string> originalIdentifiers_;
     std::set<std::string> generatedNames_;
     std::set<std::string> preprocessorReferences_;
+    std::uint32_t randomState_;
 
     static bool isIdentifierStart(char character)
     {
@@ -1412,7 +1416,7 @@ private:
                 const std::size_t alphabetSize = index == 0
                     ? sizeof(alphabetic) - 1
                     : sizeof(alphanumeric) - 1;
-                result.push_back(alphabet[std::rand() % alphabetSize]);
+                result.push_back(alphabet[nextRandom() % alphabetSize]);
             }
         } while (originalIdentifiers_.find(result) != originalIdentifiers_.end() ||
                  generatedNames_.find(result) != generatedNames_.end());
@@ -1420,12 +1424,21 @@ private:
         generatedNames_.insert(result);
         return result;
     }
+
+    std::uint32_t nextRandom()
+    {
+        randomState_ ^= randomState_ << 13;
+        randomState_ ^= randomState_ >> 17;
+        randomState_ ^= randomState_ << 5;
+        return randomState_;
+    }
 };
 }
 
 std::vector<std::string> ResolveIdentifierNames(
-    const std::vector<IdentifierSourceToken>& sourceTokens)
+    const std::vector<IdentifierSourceToken>& sourceTokens,
+    std::uint32_t seed)
 {
-    Resolver resolver(sourceTokens);
+    Resolver resolver(sourceTokens, seed);
     return resolver.run();
 }
