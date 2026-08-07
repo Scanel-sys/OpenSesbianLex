@@ -13,6 +13,8 @@
     extern int if_processing;
     extern int if_id;
     extern int if_type;
+
+    static int preprocessor_line = 0;
 %}
 
 %x STR
@@ -55,11 +57,11 @@ MALFORMED_FLOAT                 ({MALFORMED_DECIMAL_EXPONENT}|{MALFORMED_HEXADEC
                   }
 
 if              { if_processing = 1; BeginToken(yytext); return IF; }
-include         { if_type = 1; BeginToken(yytext); return INCLUDE; }
-define          { if_type = 1; BeginToken(yytext); return DEFINE; }
-ifdef           { if_type = 1; BeginToken(yytext); return IFDEF; }
-ifndef          { if_type = 1; BeginToken(yytext); return IFNDEF; }
-endif           { if_type = 1; BeginToken(yytext); return ENDIF; }
+include         { preprocessor_line = 1; if_type = 1; BeginToken(yytext); return INCLUDE; }
+define          { preprocessor_line = 1; if_type = 1; BeginToken(yytext); return DEFINE; }
+ifdef           { preprocessor_line = 1; if_type = 1; BeginToken(yytext); return IFDEF; }
+ifndef          { preprocessor_line = 1; if_type = 1; BeginToken(yytext); return IFNDEF; }
+endif           { preprocessor_line = 1; if_type = 1; BeginToken(yytext); return ENDIF; }
 else            { BeginToken(yytext); return ELSE; }
 for             { BeginToken(yytext); return FOR; }
 while           { BeginToken(yytext); return WHILE; }
@@ -70,14 +72,18 @@ break           { BeginToken(yytext); return BREAK; }
 continue        { BeginToken(yytext); return CONTINUE; }
 int             { if_type = 1; BeginToken(yytext); return INT; }
 char            { if_type = 1; BeginToken(yytext); return CHAR; }
+bool            { if_type = 1; BeginToken(yytext); return INT; }
+uchar           { if_type = 1; BeginToken(yytext); return CHAR; }
+(ushort|uint|ulong) { if_type = 1; BeginToken(yytext); return INT; }
 float           { if_type = 1; BeginToken(yytext); return FLOAT; }
-float2          { if_type = 1; BeginToken(yytext); return FLOAT; }
-float3          { if_type = 1; BeginToken(yytext); return FLOAT; }
-float4          { if_type = 1; BeginToken(yytext); return FLOAT; }
-float8          { if_type = 1; BeginToken(yytext); return FLOAT; }
-float16         { if_type = 1; BeginToken(yytext); return FLOAT; }
-float32         { if_type = 1; BeginToken(yytext); return FLOAT; }
+float(2|3|4|8|16) { if_type = 1; BeginToken(yytext); return FLOAT; }
+half(2|3|4|8|16)? { if_type = 1; BeginToken(yytext); return FLOAT; }
 double          { if_type = 1; BeginToken(yytext); return DOUBLE; }
+double(2|3|4|8|16) { if_type = 1; BeginToken(yytext); return DOUBLE; }
+char(2|3|4|8|16) { if_type = 1; BeginToken(yytext); return CHAR; }
+(uchar|short|ushort|int|uint|long|ulong)(2|3|4|8|16) {
+                    if_type = 1; BeginToken(yytext); return INT;
+                  }
 const           { if_type = 1; BeginToken(yytext); return CONST; }
 unsigned        { if_type = 1; BeginToken(yytext); return UNSIGNED; }
 size_t          { if_type = 1; BeginToken(yytext); return SIZE_T; }
@@ -201,19 +207,18 @@ __kernel        { if_type = 1; BeginToken(yytext); return KERNEL; }
                     return 0;
                   }
 
-[ ]             {
-                    if (if_type != 0)
+[ \r\t]         {
+                    if (if_type != 0 || preprocessor_line != 0)
                     {
-                        if_type = 0;
                         BeginToken(yytext);
                     }
+                    if_type = 0;
                   }
 
-[\r\t\n]       {
-                    if (directives_ended == 0)
-                    {
-                        BeginToken(yytext);
-                    }
+\n                {
+                    BeginToken(yytext);
+                    if_type = 0;
+                    preprocessor_line = 0;
                   }
 
 "-="            { BeginToken(yytext); return MIN_IS; }
@@ -227,6 +232,7 @@ __kernel        { if_type = 1; BeginToken(yytext); return KERNEL; }
 "+="            { BeginToken(yytext); return PLUS_IS; }
 "++"            { BeginToken(yytext); return INCR; }
 "--"            { BeginToken(yytext); return DECR; }
+"->"            { BeginToken(yytext); return ARROW; }
 
 [-{};()=<>+*/!,] {
                     BeginToken(yytext);
@@ -238,12 +244,6 @@ __kernel        { if_type = 1; BeginToken(yytext); return KERNEL; }
                     BeginToken(yytext);
                     yylval = (int)*yytext;
                     return ID;
-                  }
-
-[a-zA-Z_][a-zA-Z0-9_]*"."[a-zA-Z0-9_]+ {
-                    BeginToken(yytext);
-                    yylval = (int)*yytext;
-                    return STRUCT_ID;
                   }
 
 .                 {

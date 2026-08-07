@@ -31,7 +31,7 @@
 %token AND OR 
 %token INCLUDE DEFINE TYPEDEF IFDEF IFNDEF ENDIF
 %token UNION STRUCT
-%token STRING ID STRUCT_ID
+%token STRING ID ARROW
 %token PRINT
 %token CONST VOID
 %token INT CHAR FLOAT DOUBLE SIZE_T
@@ -231,7 +231,8 @@ FOR_EXPR_3:
 
 GEN_ID:
         ID
-|       STRUCT_ID
+|       GEN_ID '.' ID
+|       GEN_ID ARROW ID
 
 EXPR:
         EXPR_LOGIC_1
@@ -274,7 +275,7 @@ PTR_DECL:
 
 
 
-VAR_ASSIGN: 
+VAR_ASSIGN:
         GEN_ID '=' EXPR
 |       GEN_ID SYMBOLS_IS EXPR
 
@@ -373,8 +374,8 @@ VAL:
 |   FLOAT_NUM
 |   STRING
 |   UNARY VAL
-|   '(' EXPR ')' 
-|   GEN_ID ARR_BRACERS_ASSIGN 
+|   '(' EXPR ')'
+|   GEN_ID ARR_BRACERS_ASSIGN
 |   FUNCTION FUNCTOR
 |   GEN_ID
 |   GEN_ID INCR
@@ -387,6 +388,9 @@ UNARY:
     '-'
 |   '+'
 |   '!'
+|   '&'
+|   '*'
+|   '~'
 
 ARGS: | ARG | ARGS ',' ARG
 ARG:   EXPR

@@ -114,11 +114,23 @@ public:
             if (ifExpressionStart_ == 0 && tokenText == "(")
             {
                 ifExpressionStart_ = tempTokens_.size();
+                ifExpressionParenthesisDepth_ = 1;
             }
-
-            if (ifExpressionEnd_ == 0 && tokenText == ")")
+            else if (ifExpressionStart_ != 0 && ifExpressionEnd_ == 0)
             {
-                ifExpressionEnd_ = tempTokens_.size() - 1;
+                if (tokenText == "(")
+                {
+                    ++ifExpressionParenthesisDepth_;
+                }
+                else if (tokenText == ")" &&
+                         ifExpressionParenthesisDepth_ > 0)
+                {
+                    --ifExpressionParenthesisDepth_;
+                    if (ifExpressionParenthesisDepth_ == 0)
+                    {
+                        ifExpressionEnd_ = tempTokens_.size() - 1;
+                    }
+                }
             }
 
             if (ifBodyStart_ == 0 && tokenText == "{")
@@ -163,6 +175,7 @@ public:
             ifExpressionStart_ = 0;
             ifExpressionEnd_ = 0;
             ifBodyStart_ = 0;
+            ifExpressionParenthesisDepth_ = 0;
         }
         else if (tempTokens_.empty())
         {
@@ -201,6 +214,7 @@ private:
     std::size_t ifBodyStart_ = 0;
     std::size_t ifExpressionStart_ = 0;
     std::size_t ifExpressionEnd_ = 0;
+    std::size_t ifExpressionParenthesisDepth_ = 0;
 
     static void appendTokens(
         std::vector<ObfuscationToken>& destination,
@@ -314,10 +328,50 @@ private:
         return result;
     }
 
+    static bool isVectorSelector(const std::string& identifier)
+    {
+        if (identifier.empty())
+        {
+            return false;
+        }
+
+        const bool xyzw = identifier.size() <= 4 &&
+            identifier.find_first_not_of("xyzw") == std::string::npos;
+        const bool rgba = identifier.size() <= 4 &&
+            identifier.find_first_not_of("rgba") == std::string::npos;
+        const bool hexadecimalSelector = identifier.size() >= 2 &&
+            identifier.size() <= 17 && identifier.front() == 's' &&
+            identifier.find_first_not_of("0123456789abcdefABCDEF", 1) ==
+                std::string::npos;
+        const bool halfSelector = identifier == "lo" || identifier == "hi" ||
+            identifier == "even" || identifier == "odd";
+        return xyzw || rgba || hexadecimalSelector || halfSelector;
+    }
+
+    static bool isProtectedOpenCLIdentifier(const std::string& identifier)
+    {
+        if (isVectorSelector(identifier) ||
+            identifier.compare(0, 2, "__") == 0 ||
+            (identifier.size() >= 2 &&
+             identifier.compare(identifier.size() - 2, 2, "_t") == 0))
+        {
+            return true;
+        }
+
+        return std::isupper(static_cast<unsigned char>(identifier.front())) != 0 &&
+            identifier.find_first_not_of("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_") ==
+                std::string::npos;
+    }
+
     void obfuscateIdentifiers()
     {
         for (const auto& identifier : identifiers_)
         {
+            if (isProtectedOpenCLIdentifier(identifier.first))
+            {
+                continue;
+            }
+
             std::string newName;
             const std::size_t generatedLength = std::max<std::size_t>(
                 1, (minGeneratedNameLength + identifier.first.size()) %

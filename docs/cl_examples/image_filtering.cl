@@ -108,8 +108,6 @@ __kernel void filterImageWithCache(const unsigned int maskSize,
      * the same work-group size declared in the host code).
      */
 
-    const int SUB_SIZE = 16;
-
     /**
      * Get work-item identifiers.
      */
@@ -126,7 +124,7 @@ __kernel void filterImageWithCache(const unsigned int maskSize,
      * Declare submatrix used to cache the input image on local memory.
      */
 
-    __local unsigned char sub[SUB_SIZE][SUB_SIZE];
+    __local unsigned char sub[16][16];
 
     /**
      * Synchronize all work-items in this work-group.

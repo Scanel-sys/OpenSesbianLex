@@ -9,6 +9,12 @@ option(
     "Build tests that execute original and obfuscated kernels via OpenCL"
     OFF
 )
+set(
+    OPEN_SLEX_OPENCL_RUNTIME_LAUNCHER
+    ""
+    CACHE STRING
+    "Optional command used to launch OpenCL runtime tests (for example oclgrind)"
+)
 
 # GNU tools are usually named bison/flex. WinFlexBison uses
 # win_bison/win_flex, so accept both without hard-coded install paths.
@@ -175,6 +181,7 @@ if(BUILD_TESTING)
     add_parser_test(opencl.valid.mandelbrot docs/cl_examples/mandelbrot.cl 0)
     add_parser_test(opencl.valid.matrix_multiplication docs/cl_examples/matrix_multiplication.cl 0)
     add_parser_test(opencl.valid.strings docs/cl_examples/string_literals.cl 0)
+    add_parser_test(opencl.valid.semantic_features tests/opencl_semantic_kernel.cl 0)
     add_parser_test(
         opencl.invalid.string_escape
         docs/cl_examples/FALSE_string_escape.cl
@@ -256,6 +263,23 @@ if(BUILD_TESTING)
         PROPERTIES LABELS "opencl;obfuscation" TIMEOUT 10
     )
 
+    set(OPEN_SLEX_OPENCL_FEATURE_OUTPUT
+        "${OPEN_SLEX_GENERATED_TEST_DIR}/opencl-features-obfuscated.cl"
+    )
+    add_test(
+        NAME opencl.obfuscation.language_features
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-DPARSER=$<TARGET_FILE:OpenSLex>"
+            "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_semantic_kernel.cl"
+            "-DOUTPUT=${OPEN_SLEX_OPENCL_FEATURE_OUTPUT}"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunOpenCLFeatureTest.cmake"
+    )
+    set_tests_properties(
+        opencl.obfuscation.language_features
+        PROPERTIES LABELS "opencl;obfuscation;semantic" TIMEOUT 10
+    )
+
     add_test(
         NAME obfuscation.behavior_equivalence
         COMMAND
@@ -290,6 +314,12 @@ if(BUILD_TESTING)
         set(OPEN_SLEX_OPENCL_SEMANTIC_OUTPUT
             "${OPEN_SLEX_GENERATED_TEST_DIR}/opencl-semantic-obfuscated.cl"
         )
+        set(opencl_runtime_launcher_argument)
+        if(NOT OPEN_SLEX_OPENCL_RUNTIME_LAUNCHER STREQUAL "")
+            list(APPEND opencl_runtime_launcher_argument
+                "-DRUNTIME_LAUNCHER=${OPEN_SLEX_OPENCL_RUNTIME_LAUNCHER}"
+            )
+        endif()
         add_test(
             NAME opencl.obfuscation.runtime_equivalence
             COMMAND
@@ -298,12 +328,48 @@ if(BUILD_TESTING)
                 "-DRUNNER=$<TARGET_FILE:OpenSLexOpenCLSemanticRunner>"
                 "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_semantic_kernel.cl"
                 "-DOUTPUT=${OPEN_SLEX_OPENCL_SEMANTIC_OUTPUT}"
+                ${opencl_runtime_launcher_argument}
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunOpenCLSemanticTest.cmake"
         )
         set_tests_properties(
             opencl.obfuscation.runtime_equivalence
             PROPERTIES LABELS "opencl;obfuscation;semantic" TIMEOUT 60
         )
+
+        file(GLOB OPEN_SLEX_OPENCL_EXAMPLES CONFIGURE_DEPENDS
+            "${CMAKE_CURRENT_SOURCE_DIR}/docs/cl_examples/*.cl"
+        )
+        foreach(opencl_example IN LISTS OPEN_SLEX_OPENCL_EXAMPLES)
+            get_filename_component(opencl_example_name "${opencl_example}" NAME)
+            if(opencl_example_name MATCHES "^FALSE_")
+                continue()
+            endif()
+
+            get_filename_component(opencl_example_stem "${opencl_example}" NAME_WE)
+            string(MAKE_C_IDENTIFIER
+                "${opencl_example_stem}" opencl_example_test_suffix
+            )
+            set(opencl_example_output
+                "${OPEN_SLEX_GENERATED_TEST_DIR}/${opencl_example_stem}-obfuscated.cl"
+            )
+            add_test(
+                NAME "opencl.obfuscation.build.${opencl_example_test_suffix}"
+                COMMAND
+                    "${CMAKE_COMMAND}"
+                    "-DPARSER=$<TARGET_FILE:OpenSLex>"
+                    "-DRUNNER=$<TARGET_FILE:OpenSLexOpenCLSemanticRunner>"
+                    "-DINPUT=${opencl_example}"
+                    "-DOUTPUT=${opencl_example_output}"
+                    ${opencl_runtime_launcher_argument}
+                    -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunOpenCLBuildTest.cmake"
+            )
+            set_tests_properties(
+                "opencl.obfuscation.build.${opencl_example_test_suffix}"
+                PROPERTIES
+                    LABELS "opencl;obfuscation;build"
+                    TIMEOUT 60
+            )
+        endforeach()
     endif()
 
     add_test(
@@ -362,6 +428,7 @@ if(BUILD_TESTING)
         opencl.valid.mandelbrot
         opencl.valid.matrix_multiplication
         opencl.valid.strings
+        opencl.valid.semantic_features
         opencl.valid.line_comment_at_eof
         PROPERTIES LABELS "opencl;valid"
     )

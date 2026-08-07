@@ -8,8 +8,19 @@ permissions:
   contents: read
 
 jobs:
-  linux:
+  linux-opencl:
+    name: Linux OpenCL (${{ matrix.runtime }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runtime: PoCL
+            package: pocl-opencl-icd
+            launcher: ""
+          - runtime: Oclgrind
+            package: oclgrind
+            launcher: oclgrind
     steps:
       - uses: actions/checkout@v6
 
@@ -22,13 +33,14 @@ jobs:
             g++ \
             ninja-build \
             ocl-icd-opencl-dev \
-            pocl-opencl-icd
+            ${{ matrix.package }}
 
       - name: Configure
         run: >-
           cmake -S . -B build -G Ninja
           -DCMAKE_BUILD_TYPE=Release
           -DOPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS=ON
+          -DOPEN_SLEX_OPENCL_RUNTIME_LAUNCHER=${{ matrix.launcher }}
 
       - name: Build
         run: cmake --build build
