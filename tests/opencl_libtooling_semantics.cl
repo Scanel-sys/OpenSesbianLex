@@ -1,6 +1,6 @@
 #define CALL_MACRO_TARGET(argument) macro_target(argument)
 #define OPEN_SLEX_KERNEL __kernel
-#include "clang_macro_header.h"
+#include "libtooling_macro_header.h"
 
 typedef struct
 {
@@ -18,6 +18,11 @@ int semantic_external_helper(int argument)
     return argument + 2;
 }
 
+int header_declared_helper(int argument)
+{
+    return argument + 3;
+}
+
 int semantic_helper(SemanticItem* item)
 {
     int value = 11;
@@ -26,7 +31,7 @@ int semantic_helper(SemanticItem* item)
     return item->value + value + x + (int)component;
 }
 
-__kernel void clang_semantic_frontend(__global int* output)
+__kernel void libtooling_semantic_frontend(__global int* output)
 {
     SemanticItem item = {
         .value = 5,
@@ -43,5 +48,5 @@ __kernel void clang_semantic_frontend(__global int* output)
 
 OPEN_SLEX_KERNEL void macro_qualified_kernel(__global int* output)
 {
-    output[1] = 17;
+    output[1] = header_declared_helper(17);
 }
