@@ -4,30 +4,31 @@
 #include <string>
 #include <vector>
 
-struct ClangFrontendOptions
+struct LibToolingFrontendOptions
 {
     std::uint32_t seed = 0x9e3779b9u;
     std::vector<std::string> compilerArguments;
     bool insertOpaquePredicates = true;
 };
 
-enum class ClangFrontendStatus
+enum class LibToolingFrontendStatus
 {
     Success,
     SyntaxError,
     FrontendError,
 };
 
-struct ClangFrontendResult
+struct LibToolingFrontendResult
 {
-    ClangFrontendStatus status = ClangFrontendStatus::FrontendError;
+    LibToolingFrontendStatus status =
+        LibToolingFrontendStatus::FrontendError;
     std::string transformedSource;
     std::string diagnostics;
 };
 
-bool HasClangSemanticFrontend();
+bool HasLibToolingFrontend();
 
-ClangFrontendResult RunClangSemanticFrontend(
+LibToolingFrontendResult RunLibToolingFrontend(
     const std::string& inputPath,
     const std::string& source,
-    const ClangFrontendOptions& options);
+    const LibToolingFrontendOptions& options);

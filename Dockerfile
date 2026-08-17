@@ -11,7 +11,9 @@ RUN apt-get update \
         cmake \
         flex \
         g++ \
+        libclang-cpp-dev \
         libclang-dev \
+        llvm-dev \
         ninja-build \
         ocl-icd-opencl-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -31,7 +33,7 @@ COPY . .
 
 RUN cmake -S . -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
-        -DOPEN_SLEX_FRONTEND=CLANG \
+        -DOPEN_SLEX_FRONTEND=LIBTOOLING \
         -DOPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS=ON \
     && cmake --build build \
     && ctest --test-dir build --output-on-failure
@@ -49,7 +51,7 @@ COPY . .
 
 RUN cmake -S . -B build -G Ninja \
         -DCMAKE_BUILD_TYPE=Release \
-        -DOPEN_SLEX_FRONTEND=CLANG \
+        -DOPEN_SLEX_FRONTEND=LIBTOOLING \
         -DOPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS=ON \
         -DOPEN_SLEX_OPENCL_RUNTIME_LAUNCHER=oclgrind \
     && cmake --build build \
@@ -64,7 +66,7 @@ COPY . .
 RUN cmake -S . -B build-sanitized -G Ninja \
         -DCMAKE_BUILD_TYPE=RelWithDebInfo \
         -DCMAKE_CXX_COMPILER=clang++ \
-        -DOPEN_SLEX_FRONTEND=CLANG \
+        -DOPEN_SLEX_FRONTEND=LIBTOOLING \
         -DOPEN_SLEX_ENABLE_SANITIZERS=ON \
         -DOPEN_SLEX_BUILD_FUZZER=ON \
     && cmake --build build-sanitized \

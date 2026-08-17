@@ -11,7 +11,7 @@ file(REMOVE "${OUTPUT}")
 execute_process(
     COMMAND
         "${PARSER}"
-        --frontend clang
+        --frontend libtooling
         --seed 246813579
         "${INPUT}"
         "${OUTPUT}"
@@ -23,7 +23,7 @@ execute_process(
 if(NOT parser_result EQUAL 0)
     message(
         FATAL_ERROR
-        "Clang semantic obfuscation failed.\n"
+        "LibTooling semantic obfuscation failed.\n"
         "stdout:\n${parser_stdout}\n"
         "stderr:\n${parser_stderr}"
     )
@@ -32,18 +32,19 @@ endif()
 file(READ "${OUTPUT}" obfuscated_source)
 
 foreach(required_text
-    "clang_semantic_frontend"
+    "libtooling_semantic_frontend"
     "macro_qualified_kernel"
     "CALL_MACRO_TARGET(argument) macro_target(argument)"
     "macro_target"
     "semantic_external_helper"
+    "header_declared_helper"
     ".x"
     ".xy"
     ".s0"
 )
     string(FIND "${obfuscated_source}" "${required_text}" text_position)
     if(text_position EQUAL -1)
-        message(FATAL_ERROR "Clang output lost '${required_text}'")
+        message(FATAL_ERROR "LibTooling output lost '${required_text}'")
     endif()
 endforeach()
 
@@ -81,13 +82,13 @@ if(field_name STREQUAL local_name)
     message(FATAL_ERROR "A structure field and local variable shared one identity")
 endif()
 
-# Re-run the semantic frontend over its own output. Besides validating the
-# generated OpenCL, this proves that the result is not limited by Bison.
+# Re-run LibTooling over its own output. This validates both the generated
+# OpenCL and the fact that the output does not depend on the legacy grammar.
 get_filename_component(input_directory "${INPUT}" DIRECTORY)
 execute_process(
     COMMAND
         "${PARSER}"
-        --frontend clang
+        --frontend libtooling
         "--clang-arg=-I${input_directory}"
         "${OUTPUT}"
         "${OUTPUT}.second.cl"
@@ -98,8 +99,29 @@ execute_process(
 if(NOT reparse_result EQUAL 0)
     message(
         FATAL_ERROR
-        "Clang rejected the obfuscated result.\n"
+        "LibTooling rejected the obfuscated result.\n"
         "stdout:\n${reparse_stdout}\n"
         "stderr:\n${reparse_stderr}"
+    )
+endif()
+
+# Keep the old CLI spelling as a compatibility alias while the documented and
+# CMake-facing name is now libtooling.
+execute_process(
+    COMMAND
+        "${PARSER}"
+        --frontend clang
+        "${INPUT}"
+        "${OUTPUT}.clang-alias.cl"
+    RESULT_VARIABLE alias_result
+    OUTPUT_VARIABLE alias_stdout
+    ERROR_VARIABLE alias_stderr
+)
+if(NOT alias_result EQUAL 0)
+    message(
+        FATAL_ERROR
+        "The --frontend clang compatibility alias failed.\n"
+        "stdout:\n${alias_stdout}\n"
+        "stderr:\n${alias_stderr}"
     )
 endif()

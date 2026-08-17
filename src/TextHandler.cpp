@@ -1,7 +1,7 @@
 #include "TextHandler.hpp"
 #include "AtomicFileWriter.hpp"
-#include "ClangFrontend.hpp"
 #include "IdentifierResolver.hpp"
+#include "LibToolingFrontend.hpp"
 
 #include <algorithm>
 #include <cerrno>
@@ -44,7 +44,7 @@ enum class ExitCode
 enum class FrontendMode
 {
     Auto,
-    Clang,
+    LibTooling,
     Legacy,
 };
 
@@ -441,9 +441,10 @@ bool parseFrontendMode(const char* text, FrontendMode& mode)
         mode = FrontendMode::Auto;
         return true;
     }
-    if (std::strcmp(text, "clang") == 0)
+    if (std::strcmp(text, "libtooling") == 0 ||
+        std::strcmp(text, "clang") == 0)
     {
-        mode = FrontendMode::Clang;
+        mode = FrontendMode::LibTooling;
         return true;
     }
     if (std::strcmp(text, "legacy") == 0)
@@ -496,7 +497,8 @@ bool readSourceFile(
 void printUsage(const char* programName)
 {
     std::cerr << "Usage: " << programName
-              << " [--seed <uint32>] [--frontend auto|clang|legacy]"
+              << " [--seed <uint32>]"
+                 " [--frontend auto|libtooling|clang|legacy]"
                  " [--clang-arg <argument>]..."
                  " <input-file> [output-file]\n";
 }
@@ -728,7 +730,8 @@ int main(int argc, char* argv[])
                 !parseFrontendMode(argv[argumentIndex + 1], frontendMode))
             {
                 std::cerr
-                    << "Error: --frontend requires auto, clang, or legacy.\n";
+                    << "Error: --frontend requires auto, libtooling, "
+                       "clang, or legacy.\n";
                 printUsage(programName);
                 return static_cast<int>(ExitCode::UsageError);
             }
@@ -774,23 +777,23 @@ int main(int argc, char* argv[])
         : "obfuscated_result.cl";
     obfuscator.setSeed(seed);
 
-    const bool useClangFrontend =
-        frontendMode == FrontendMode::Clang ||
+    const bool useLibToolingFrontend =
+        frontendMode == FrontendMode::LibTooling ||
         (frontendMode == FrontendMode::Auto &&
-         HasClangSemanticFrontend() &&
+         HasLibToolingFrontend() &&
          hasOpenCLFileExtension(inputPath));
 
-    if (frontendMode == FrontendMode::Clang &&
-        !HasClangSemanticFrontend())
+    if (frontendMode == FrontendMode::LibTooling &&
+        !HasLibToolingFrontend())
     {
         std::cerr
-            << "Error: this OpenSLex build does not contain the Clang "
+            << "Error: this OpenSLex build does not contain the LibTooling "
                "semantic frontend. Reconfigure with "
-               "-DOPEN_SLEX_FRONTEND=CLANG.\n";
+               "-DOPEN_SLEX_FRONTEND=LIBTOOLING.\n";
         return static_cast<int>(ExitCode::FrontendError);
     }
 
-    if (useClangFrontend)
+    if (useLibToolingFrontend)
     {
         std::string source;
         std::string inputError;
@@ -801,10 +804,10 @@ int main(int argc, char* argv[])
             return static_cast<int>(ExitCode::InputError);
         }
 
-        ClangFrontendOptions options;
+        LibToolingFrontendOptions options;
         options.seed = seed;
         options.compilerArguments = clangArguments;
-        const ClangFrontendResult frontend = RunClangSemanticFrontend(
+        const LibToolingFrontendResult frontend = RunLibToolingFrontend(
             inputPath, source, options);
         if (!frontend.diagnostics.empty())
         {
@@ -814,10 +817,10 @@ int main(int argc, char* argv[])
                 std::cerr << '\n';
             }
         }
-        if (frontend.status != ClangFrontendStatus::Success)
+        if (frontend.status != LibToolingFrontendStatus::Success)
         {
             return static_cast<int>(
-                frontend.status == ClangFrontendStatus::SyntaxError
+                frontend.status == LibToolingFrontendStatus::SyntaxError
                     ? ExitCode::SyntaxError
                     : ExitCode::FrontendError);
         }
@@ -843,7 +846,7 @@ int main(int argc, char* argv[])
     const ReadLineResult firstLine = getNextLine();
     if (firstLine == ReadLineResult::Line)
     {
-        if (useClangFrontend)
+        if (useLibToolingFrontend)
         {
             while (yylex() != 0)
             {

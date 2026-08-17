@@ -30,32 +30,39 @@ set(
     OPEN_SLEX_FRONTEND
     "AUTO"
     CACHE STRING
-    "Semantic frontend: AUTO, CLANG, or LEGACY"
+    "Semantic frontend: AUTO, LIBTOOLING, or LEGACY"
 )
 set_property(
     CACHE OPEN_SLEX_FRONTEND
-    PROPERTY STRINGS AUTO CLANG LEGACY
+    PROPERTY STRINGS AUTO LIBTOOLING LEGACY
 )
 string(TOUPPER "${OPEN_SLEX_FRONTEND}" OPEN_SLEX_FRONTEND)
-if(NOT OPEN_SLEX_FRONTEND MATCHES "^(AUTO|CLANG|LEGACY)$")
+if(OPEN_SLEX_FRONTEND STREQUAL "CLANG")
+    message(DEPRECATION
+        "OPEN_SLEX_FRONTEND=CLANG is an alias for LIBTOOLING"
+    )
+    set(OPEN_SLEX_FRONTEND "LIBTOOLING")
+endif()
+if(NOT OPEN_SLEX_FRONTEND MATCHES "^(AUTO|LIBTOOLING|LEGACY)$")
     message(FATAL_ERROR
-        "OPEN_SLEX_FRONTEND must be AUTO, CLANG, or LEGACY"
+        "OPEN_SLEX_FRONTEND must be AUTO, LIBTOOLING, or LEGACY"
     )
 endif()
 
-set(OPEN_SLEX_HAS_CLANG_FRONTEND OFF)
+set(OPEN_SLEX_HAS_LIBTOOLING_FRONTEND OFF)
 if(NOT OPEN_SLEX_FRONTEND STREQUAL "LEGACY")
-    find_package(LibClang QUIET)
-    if(LibClang_FOUND)
-        set(OPEN_SLEX_HAS_CLANG_FRONTEND ON)
-        message(STATUS "OpenSLex semantic frontend: Clang/libclang")
-    elseif(OPEN_SLEX_FRONTEND STREQUAL "CLANG")
+    find_package(ClangTooling QUIET)
+    if(ClangTooling_FOUND)
+        set(OPEN_SLEX_HAS_LIBTOOLING_FRONTEND ON)
+        message(STATUS "OpenSLex semantic frontend: Clang LibTooling")
+    elseif(OPEN_SLEX_FRONTEND STREQUAL "LIBTOOLING")
         message(FATAL_ERROR
-            "OPEN_SLEX_FRONTEND=CLANG requires libclang and clang-c/Index.h"
+            "OPEN_SLEX_FRONTEND=LIBTOOLING requires the LLVM and Clang "
+            "CMake development packages with clangTooling"
         )
     else()
         message(STATUS
-            "OpenSLex semantic frontend: legacy (libclang was not found)"
+            "OpenSLex semantic frontend: legacy (LibTooling was not found)"
         )
     endif()
 else()
@@ -105,17 +112,17 @@ add_executable(
     OpenSLex
     src/AtomicFileWriter.cpp
     src/AtomicFileWriter.hpp
-    src/ClangFrontend.cpp
-    src/ClangFrontend.hpp
     src/IdentifierResolver.cpp
     src/IdentifierResolver.hpp
+    src/LibToolingFrontend.cpp
+    src/LibToolingFrontend.hpp
     src/TextHandler.cpp
     src/TextHandler.hpp
     ${BISON_OpenSLexParser_OUTPUTS}
     ${FLEX_OpenSLexLexer_OUTPUTS}
 )
 
-target_compile_features(OpenSLex PRIVATE cxx_std_14)
+target_compile_features(OpenSLex PRIVATE cxx_std_17)
 target_include_directories(
     OpenSLex
     PRIVATE
@@ -123,26 +130,14 @@ target_include_directories(
         "${OPEN_SLEX_GENERATED_DIR}"
 )
 
-if(OPEN_SLEX_HAS_CLANG_FRONTEND)
+if(OPEN_SLEX_HAS_LIBTOOLING_FRONTEND)
     target_compile_definitions(
         OpenSLex
         PRIVATE
-            OPEN_SLEX_HAS_CLANG_FRONTEND=1
-            "OPEN_SLEX_CLANG_RESOURCE_DIR=\"${LibClang_RESOURCE_DIR}\""
+            OPEN_SLEX_HAS_LIBTOOLING_FRONTEND=1
+            "OPEN_SLEX_CLANG_RESOURCE_DIR=\"${ClangTooling_RESOURCE_DIR}\""
     )
-    target_link_libraries(OpenSLex PRIVATE LibClang::LibClang)
-    if(WIN32 AND LibClang_RUNTIME_LIBRARY)
-        add_custom_command(
-            TARGET OpenSLex
-            POST_BUILD
-            COMMAND
-                "${CMAKE_COMMAND}" -E copy_if_different
-                "${LibClang_RUNTIME_LIBRARY}"
-                "$<TARGET_FILE_DIR:OpenSLex>"
-            COMMENT "Copying libclang runtime next to OpenSLex"
-            VERBATIM
-        )
-    endif()
+    target_link_libraries(OpenSLex PRIVATE ClangTooling::ClangTooling)
 endif()
 
 function(open_slex_enable_sanitizers target_name)
@@ -324,15 +319,15 @@ if(BUILD_TESTING)
     add_parser_test(opencl.valid.comment_boundaries tests/opencl_comment_boundaries.cl 0)
     add_parser_test(opencl.valid.preprocessor tests/opencl_preprocessor.cl 0)
     add_parser_test(opencl.valid.language_coverage tests/opencl_language_coverage.cl 0)
-    if(OPEN_SLEX_HAS_CLANG_FRONTEND)
+    if(OPEN_SLEX_HAS_LIBTOOLING_FRONTEND)
         add_parser_test(
-            opencl.valid.clang_semantics
-            tests/opencl_clang_semantics.cl
+            opencl.valid.libtooling_semantics
+            tests/opencl_libtooling_semantics.cl
             0
         )
         add_parser_test(
-            opencl.invalid.clang_undeclared_identifier
-            tests/FALSE_opencl_undeclared_identifier.cl
+            opencl.invalid.libtooling_undeclared_identifier
+            tests/FALSE_opencl_libtooling_undeclared_identifier.cl
             1
             "undeclared identifier"
         )
@@ -546,22 +541,22 @@ if(BUILD_TESTING)
         PROPERTIES LABELS "opencl;obfuscation;comments" TIMEOUT 10
     )
 
-    if(OPEN_SLEX_HAS_CLANG_FRONTEND)
-        set(OPEN_SLEX_CLANG_SEMANTIC_OUTPUT
-            "${OPEN_SLEX_GENERATED_TEST_DIR}/clang-semantics-obfuscated.cl"
+    if(OPEN_SLEX_HAS_LIBTOOLING_FRONTEND)
+        set(OPEN_SLEX_LIBTOOLING_SEMANTIC_OUTPUT
+            "${OPEN_SLEX_GENERATED_TEST_DIR}/libtooling-semantics-obfuscated.cl"
         )
         add_test(
-            NAME opencl.obfuscation.clang_semantics
+            NAME opencl.obfuscation.libtooling_semantics
             COMMAND
                 "${CMAKE_COMMAND}"
                 "-DPARSER=$<TARGET_FILE:OpenSLex>"
-                "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_clang_semantics.cl"
-                "-DOUTPUT=${OPEN_SLEX_CLANG_SEMANTIC_OUTPUT}"
-                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunClangSemanticTest.cmake"
+                "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_libtooling_semantics.cl"
+                "-DOUTPUT=${OPEN_SLEX_LIBTOOLING_SEMANTIC_OUTPUT}"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunLibToolingSemanticTest.cmake"
         )
         set_tests_properties(
-            opencl.obfuscation.clang_semantics
-            PROPERTIES LABELS "opencl;obfuscation;clang;semantic" TIMEOUT 20
+            opencl.obfuscation.libtooling_semantics
+            PROPERTIES LABELS "opencl;obfuscation;libtooling;semantic" TIMEOUT 20
         )
     endif()
 
@@ -751,10 +746,10 @@ if(BUILD_TESTING)
         opencl.valid.line_comment_at_eof
         PROPERTIES LABELS "opencl;valid"
     )
-    if(OPEN_SLEX_HAS_CLANG_FRONTEND)
+    if(OPEN_SLEX_HAS_LIBTOOLING_FRONTEND)
         set_tests_properties(
-            opencl.valid.clang_semantics
-            PROPERTIES LABELS "opencl;valid;clang;semantic"
+            opencl.valid.libtooling_semantics
+            PROPERTIES LABELS "opencl;valid;libtooling;semantic"
         )
     endif()
     set_tests_properties(
@@ -766,10 +761,10 @@ if(BUILD_TESTING)
         opencl.invalid.preprocessor_unterminated
         PROPERTIES LABELS "opencl;invalid"
     )
-    if(OPEN_SLEX_HAS_CLANG_FRONTEND)
+    if(OPEN_SLEX_HAS_LIBTOOLING_FRONTEND)
         set_tests_properties(
-            opencl.invalid.clang_undeclared_identifier
-            PROPERTIES LABELS "opencl;invalid;clang;semantic"
+            opencl.invalid.libtooling_undeclared_identifier
+            PROPERTIES LABELS "opencl;invalid;libtooling;semantic"
         )
     endif()
 endif()

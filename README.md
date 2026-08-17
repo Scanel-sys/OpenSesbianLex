@@ -1,19 +1,20 @@
 # OpenSesbianLex
 
 OpenSesbianLex is an OpenCL C source obfuscator. Its primary semantic frontend
-is Clang/libclang: Clang validates the translation unit and binds declarations
-to their exact references before identifiers are rewritten. Flex performs the
-final lexical output pass. The older Flex/Bison parser remains available as a
-compatibility frontend for builds without libclang and for historical C input.
+uses Clang LibTooling: Clang validates the translation unit, builds the C++ AST,
+and binds declarations to their exact references before identifiers are
+rewritten with `tooling::Replacements`. Flex performs the final lexical output
+pass. The older Flex/Bison parser remains available as a compatibility frontend
+for builds without the Clang development libraries and for historical C input.
 
 ## Requirements
 
 - CMake 3.20 or newer
-- A C++ compiler with C++14 support
+- A C++ compiler with C++17 support
 - Bison 2.7 or newer
 - Flex 2.6 or newer
-- Clang and the libclang development package (recommended and required by
-  `-DOPEN_SLEX_FRONTEND=CLANG`)
+- Clang, LLVM development files, and the Clang C++/LibTooling development
+  package (recommended and required by `-DOPEN_SLEX_FRONTEND=LIBTOOLING`)
 - Ninja is recommended, but another CMake generator can be used
 
 ### Windows: choose one toolchain
@@ -29,14 +30,22 @@ extract the release archive, and add the directory containing
 `win_bison.exe` and `win_flex.exe` to `PATH`. CMake accepts both the GNU
 executable names and the WinFlexBison names.
 
-Install the official LLVM Windows package as well. A default installation
-under `C:\Program Files\LLVM` is detected automatically, and CMake copies
-`libclang.dll` beside `OpenSLex.exe`. Adding LLVM's `bin` directory to `PATH`
-is optional. If LLVM is elsewhere, pass its prefix as
-`-DLibClang_ROOT=<path-to-LLVM>` when configuring CMake.
+Install the official LLVM **development archive** whose name starts with
+`clang+llvm-`, not only the `LLVM-*.exe` toolchain installer. The archive
+contains `clang/Tooling` headers, `ClangConfig.cmake`, `LLVMConfig.cmake`, and
+the C++ libraries which the regular Windows installer omits. Extract it and
+pass its root to CMake as `-DClangTooling_ROOT=<path-to-clang+llvm>`.
 
-Visual Studio 2019 or newer can provide the C++ compiler and the default CMake
-generator. Ninja is not required for this configuration.
+Adding the archive's `bin` directory to `PATH` is optional. The separately
+installed `C:\Program Files\LLVM` compiler is not enough to build the
+LibTooling frontend, but it can remain installed.
+
+Visual Studio 2022 can provide the C++ compiler and the default CMake
+generator. Ninja is not required for this configuration. The official LLVM 22
+development archive is built against the Visual Studio 2022 runtime and cannot
+be linked with the Visual Studio 2019 standard library. Older LLVM packages
+built with VS 2019 can still be used if their Clang C++ API is version 18 or
+newer.
 
 #### Option 2: MSYS2 UCRT64
 
@@ -60,13 +69,14 @@ run `pacman -Syu` again, and then install the packages.
 
 This MSYS2 recipe builds the compatibility frontend. Configure it with
 `-DOPEN_SLEX_FRONTEND=LEGACY`. Linux and Visual Studio are the supported
-libclang configurations.
+LibTooling configurations.
 
 ### Ubuntu/Debian
 
 ```sh
 sudo apt update
-sudo apt install cmake ninja-build g++ bison flex clang libclang-dev
+sudo apt install cmake ninja-build g++ bison flex clang \
+  llvm-dev libclang-dev libclang-cpp-dev
 ```
 
 ## Build with Visual Studio
@@ -75,7 +85,9 @@ Run these commands from the repository root in PowerShell or a Developer
 Command Prompt:
 
 ```powershell
-cmake -S . -B build -DOPEN_SLEX_FRONTEND=CLANG
+cmake -S . -B build \
+  -DOPEN_SLEX_FRONTEND=LIBTOOLING \
+  -DClangTooling_ROOT=C:/path/to/clang+llvm-22.1.8-x86_64-pc-windows-msvc
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
@@ -89,7 +101,7 @@ Run these commands from the repository root:
 ```sh
 cmake -S . -B build -G Ninja \
   -DCMAKE_BUILD_TYPE=Release \
-  -DOPEN_SLEX_FRONTEND=CLANG
+  -DOPEN_SLEX_FRONTEND=LIBTOOLING
 cmake --build build
 ```
 
@@ -176,22 +188,22 @@ argument:
 ./build/OpenSLex input.cl output.cl
 ```
 
-For `.cl` files, an AUTO build uses libclang whenever it is available. You can
-select the frontend explicitly:
+For `.cl` files, an AUTO build uses LibTooling whenever it is available. You
+can select the frontend explicitly:
 
 ```sh
-OpenSLex --frontend clang input.cl output.cl
+OpenSLex --frontend libtooling input.cl output.cl
 OpenSLex --frontend legacy historical-input.c output.c
 ```
 
-The Clang frontend renames variables, parameters, helper functions, typedefs,
+The LibTooling frontend renames variables, parameters, helper functions, typedefs,
 structure tags, fields, and enum constants together with the AST references
 bound to each declaration. Shadowed declarations and a field/local pair with
 the same spelling therefore have independent identities. Externally visible
 OpenCL kernel names, macro definitions and parameters, unresolved OpenCL
 built-ins, and vector selectors such as `.xy` and `.s0` are preserved.
 
-Clang parses OpenCL C 1.2 by default and automatically loads its OpenCL builtin
+LibTooling parses OpenCL C 1.2 by default and automatically loads Clang's OpenCL builtin
 header. Additional compiler options may be repeated, for example:
 
 ```sh
