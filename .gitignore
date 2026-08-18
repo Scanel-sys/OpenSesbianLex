@@ -9,6 +9,7 @@ src/OpenSLex.exe
 /obfuscated_result.cl
 
 build
+/build-*/
 CMakeFiles/
 CMakeCache.txt
 CTestTestfile.cmake

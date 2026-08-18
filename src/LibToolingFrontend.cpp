@@ -106,6 +106,207 @@ std::set<std::string> collectSourceIdentifiers(const std::string& source)
     return identifiers;
 }
 
+struct SkippedIdentifier
+{
+    std::string spelling;
+    unsigned int length = 0;
+};
+
+bool isPreprocessorDirectiveLine(
+    const std::string& source,
+    std::size_t offset)
+{
+    if (offset >= source.size())
+    {
+        return false;
+    }
+
+    const std::size_t precedingNewline =
+        offset == 0 ? std::string::npos : source.rfind('\n', offset - 1);
+    std::size_t lineStart = precedingNewline == std::string::npos
+        ? 0
+        : precedingNewline + 1;
+
+    for (;;)
+    {
+        std::size_t first = lineStart;
+        while (first < source.size() &&
+               (source[first] == ' ' || source[first] == '\t' ||
+                source[first] == '\v' || source[first] == '\f' ||
+                source[first] == '\r'))
+        {
+            ++first;
+        }
+        const bool startsDirective = first < source.size() &&
+            (source[first] == '#' ||
+             (first + 1 < source.size() &&
+              source[first] == '%' && source[first + 1] == ':') ||
+             (first + 2 < source.size() &&
+              source[first] == '?' && source[first + 1] == '?' &&
+              source[first + 2] == '='));
+        if (startsDirective)
+        {
+            return true;
+        }
+
+        if (lineStart == 0)
+        {
+            return false;
+        }
+
+        const std::size_t previousNewline = lineStart - 1;
+        std::size_t previousEnd = previousNewline;
+        while (previousEnd > 0 &&
+               (source[previousEnd - 1] == ' ' ||
+                source[previousEnd - 1] == '\t' ||
+                source[previousEnd - 1] == '\v' ||
+                source[previousEnd - 1] == '\f' ||
+                source[previousEnd - 1] == '\r'))
+        {
+            --previousEnd;
+        }
+        const bool continued = previousEnd > 0 &&
+            (source[previousEnd - 1] == '\\' ||
+             (previousEnd >= 3 &&
+              source[previousEnd - 3] == '?' &&
+              source[previousEnd - 2] == '?' &&
+              source[previousEnd - 1] == '/'));
+        if (!continued)
+        {
+            return false;
+        }
+
+        const std::size_t earlierNewline = previousNewline == 0
+            ? std::string::npos
+            : source.rfind('\n', previousNewline - 1);
+        lineStart = earlierNewline == std::string::npos
+            ? 0
+            : earlierNewline + 1;
+    }
+}
+
+void collectSkippedIdentifiers(
+    llvm::StringRef text,
+    unsigned int baseOffset,
+    const std::string& source,
+    std::map<unsigned int, SkippedIdentifier>& destination)
+{
+    enum class ScanState
+    {
+        Normal,
+        LineComment,
+        BlockComment,
+        StringLiteral,
+        CharacterLiteral,
+    };
+
+    ScanState state = ScanState::Normal;
+    std::size_t index = 0;
+    while (index < text.size())
+    {
+        const char current = text[index];
+        const char next = index + 1 < text.size() ? text[index + 1] : '\0';
+
+        if (state == ScanState::LineComment)
+        {
+            if (current == '\n')
+            {
+                state = ScanState::Normal;
+            }
+            ++index;
+            continue;
+        }
+        if (state == ScanState::BlockComment)
+        {
+            if (current == '*' && next == '/')
+            {
+                state = ScanState::Normal;
+                index += 2;
+            }
+            else
+            {
+                ++index;
+            }
+            continue;
+        }
+        if (state == ScanState::StringLiteral ||
+            state == ScanState::CharacterLiteral)
+        {
+            const char terminator = state == ScanState::StringLiteral
+                ? '"'
+                : '\'';
+            if (current == '\\' && index + 1 < text.size())
+            {
+                index += 2;
+            }
+            else
+            {
+                if (current == terminator || current == '\n')
+                {
+                    state = ScanState::Normal;
+                }
+                ++index;
+            }
+            continue;
+        }
+
+        if (current == '/' && next == '/')
+        {
+            state = ScanState::LineComment;
+            index += 2;
+            continue;
+        }
+        if (current == '/' && next == '*')
+        {
+            state = ScanState::BlockComment;
+            index += 2;
+            continue;
+        }
+        if (current == '"')
+        {
+            state = ScanState::StringLiteral;
+            ++index;
+            continue;
+        }
+        if (current == '\'')
+        {
+            state = ScanState::CharacterLiteral;
+            ++index;
+            continue;
+        }
+        if (!isIdentifierStart(current))
+        {
+            ++index;
+            continue;
+        }
+
+        const std::size_t start = index++;
+        while (index < text.size() && isIdentifierCharacter(text[index]))
+        {
+            ++index;
+        }
+
+        const std::size_t absoluteOffset =
+            static_cast<std::size_t>(baseOffset) + start;
+        if (absoluteOffset >
+                static_cast<std::size_t>(
+                    std::numeric_limits<unsigned int>::max()) ||
+            isPreprocessorDirectiveLine(source, absoluteOffset))
+        {
+            continue;
+        }
+
+        const unsigned int tokenOffset =
+            static_cast<unsigned int>(absoluteOffset);
+        const unsigned int tokenLength =
+            static_cast<unsigned int>(index - start);
+        destination.emplace(
+            tokenOffset,
+            SkippedIdentifier{
+                text.substr(start, index - start).str(), tokenLength});
+    }
+}
+
 std::uint32_t nextRandom(std::uint32_t& state)
 {
     state ^= state << 13;
@@ -175,6 +376,7 @@ struct FrontendState
     const std::string& source;
     const LibToolingFrontendOptions& options;
     std::set<std::string> preprocessorProtectedNames;
+    std::map<unsigned int, SkippedIdentifier> skippedIdentifiers;
     clang::tooling::Replacements replacements;
     std::string transformedSource;
     std::string internalError;
@@ -333,8 +535,11 @@ public:
             &invalid);
         if (!invalid)
         {
-            collectIdentifiers(
-                text, state_.preprocessorProtectedNames);
+            collectSkippedIdentifiers(
+                text,
+                sourceManager_.getFileOffset(begin),
+                state_.source,
+                state_.skippedIdentifiers);
         }
     }
 
@@ -505,6 +710,108 @@ void assignGeneratedNames(
     for (Symbol* symbol : ordered)
     {
         symbol->replacement = makeUniqueName(randomState, reserved);
+    }
+}
+
+void protectAmbiguousSkippedSymbols(
+    SymbolMap& symbols,
+    const FrontendState& state)
+{
+    std::set<std::string> skippedSpellings;
+    for (const auto& occurrence : state.skippedIdentifiers)
+    {
+        skippedSpellings.insert(occurrence.second.spelling);
+    }
+
+    std::map<std::string, std::vector<Symbol*>> symbolsBySpelling;
+    for (auto& entry : symbols)
+    {
+        Symbol& symbol = entry.second;
+        if (skippedSpellings.find(symbol.spelling) !=
+            skippedSpellings.end())
+        {
+            symbolsBySpelling[symbol.spelling].push_back(&symbol);
+        }
+    }
+
+    for (auto& entry : symbolsBySpelling)
+    {
+        if (entry.second.size() != 1)
+        {
+            for (Symbol* symbol : entry.second)
+            {
+                symbol->renameable = false;
+            }
+        }
+    }
+}
+
+void addSkippedIdentifierReplacements(
+    const SourceManager& sourceManager,
+    const SymbolMap& symbols,
+    FrontendState& state)
+{
+    std::map<std::string, const Symbol*> uniqueSymbols;
+    std::set<std::string> ambiguousSpellings;
+    for (const auto& entry : symbols)
+    {
+        const Symbol& symbol = entry.second;
+        if (ambiguousSpellings.find(symbol.spelling) !=
+            ambiguousSpellings.end())
+        {
+            continue;
+        }
+
+        const auto inserted = uniqueSymbols.emplace(
+            symbol.spelling, &symbol);
+        if (!inserted.second)
+        {
+            uniqueSymbols.erase(inserted.first);
+            ambiguousSpellings.insert(symbol.spelling);
+        }
+    }
+
+    const SourceLocation fileStart = sourceManager.getLocForStartOfFile(
+        sourceManager.getMainFileID());
+    for (const auto& occurrence : state.skippedIdentifiers)
+    {
+        const auto symbol = uniqueSymbols.find(occurrence.second.spelling);
+        if (symbol == uniqueSymbols.end() ||
+            symbol->second->replacement.empty())
+        {
+            continue;
+        }
+
+        if (occurrence.first > static_cast<unsigned int>(
+                std::numeric_limits<int>::max()))
+        {
+            state.internalError =
+                "LibTooling skipped-branch offset exceeds the supported "
+                "source range";
+            return;
+        }
+
+        const SourceLocation location = fileStart.getLocWithOffset(
+            static_cast<int>(occurrence.first));
+        clang::tooling::Replacement replacement(
+            sourceManager,
+            location,
+            occurrence.second.length,
+            symbol->second->replacement);
+        if (!replacement.isApplicable())
+        {
+            state.internalError =
+                "LibTooling produced an inapplicable skipped-branch "
+                "replacement";
+            return;
+        }
+        if (llvm::Error error = state.replacements.add(replacement))
+        {
+            state.internalError =
+                "LibTooling produced conflicting skipped-branch "
+                "replacements: " + llvm::toString(std::move(error));
+            return;
+        }
     }
 }
 
@@ -702,11 +1009,20 @@ public:
         ReferenceProtector protector(context.getSourceManager(), symbols);
         protector.TraverseDecl(context.getTranslationUnitDecl());
 
+        protectAmbiguousSkippedSymbols(symbols, state_);
+
         std::set<std::string> reserved = collectSourceIdentifiers(state_.source);
         assignGeneratedNames(symbols, state_.options.seed, reserved);
 
         ReplacementCollector replacements(context, symbols, state_);
         replacements.TraverseDecl(context.getTranslationUnitDecl());
+        if (!state_.internalError.empty())
+        {
+            return;
+        }
+
+        addSkippedIdentifierReplacements(
+            context.getSourceManager(), symbols, state_);
         if (!state_.internalError.empty())
         {
             return;
