@@ -11,9 +11,9 @@ namespace
 {
 struct OpenCLRuntime
 {
-    cl_context context = nullptr;
-    cl_command_queue queue = nullptr;
-    cl_device_id device = nullptr;
+    cl_context       context = nullptr;
+    cl_command_queue queue   = nullptr;
+    cl_device_id     device  = nullptr;
 
     ~OpenCLRuntime()
     {
@@ -48,25 +48,20 @@ std::string readSource(const char* path)
         return {};
     }
 
-    return std::string(
-        std::istreambuf_iterator<char>(input),
-        std::istreambuf_iterator<char>());
+    return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
 bool initializeRuntime(OpenCLRuntime& runtime)
 {
     cl_uint platformCount = 0;
-    if (!check(clGetPlatformIDs(0, nullptr, &platformCount), "clGetPlatformIDs") ||
-        platformCount == 0)
+    if (!check(clGetPlatformIDs(0, nullptr, &platformCount), "clGetPlatformIDs") || platformCount == 0)
     {
         std::cerr << "No OpenCL platform is available.\n";
         return false;
     }
 
     std::vector<cl_platform_id> platforms(platformCount);
-    if (!check(
-            clGetPlatformIDs(platformCount, platforms.data(), nullptr),
-            "clGetPlatformIDs"))
+    if (!check(clGetPlatformIDs(platformCount, platforms.data(), nullptr), "clGetPlatformIDs"))
     {
         return false;
     }
@@ -74,23 +69,18 @@ bool initializeRuntime(OpenCLRuntime& runtime)
     cl_platform_id selectedPlatform = nullptr;
     for (cl_platform_id platform : platforms)
     {
-        cl_uint deviceCount = 0;
-        const cl_int result = clGetDeviceIDs(
-            platform, CL_DEVICE_TYPE_ALL, 0, nullptr, &deviceCount);
+        cl_uint      deviceCount = 0;
+        const cl_int result      = clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, 0, nullptr, &deviceCount);
         if (result == CL_SUCCESS && deviceCount > 0)
         {
             std::vector<cl_device_id> devices(deviceCount);
-            if (!check(
-                    clGetDeviceIDs(
-                        platform, CL_DEVICE_TYPE_ALL, deviceCount,
-                        devices.data(), nullptr),
-                    "clGetDeviceIDs"))
+            if (!check(clGetDeviceIDs(platform, CL_DEVICE_TYPE_ALL, deviceCount, devices.data(), nullptr), "clGetDeviceIDs"))
             {
                 return false;
             }
 
             selectedPlatform = platform;
-            runtime.device = devices.front();
+            runtime.device   = devices.front();
             break;
         }
     }
@@ -107,42 +97,33 @@ bool initializeRuntime(OpenCLRuntime& runtime)
         0,
     };
 
-    cl_int result = CL_SUCCESS;
-    runtime.context = clCreateContext(
-        properties, 1, &runtime.device, nullptr, nullptr, &result);
+    cl_int result   = CL_SUCCESS;
+    runtime.context = clCreateContext(properties, 1, &runtime.device, nullptr, nullptr, &result);
     if (!check(result, "clCreateContext"))
     {
         return false;
     }
 
-    runtime.queue = clCreateCommandQueue(
-        runtime.context, runtime.device, 0, &result);
+    runtime.queue = clCreateCommandQueue(runtime.context, runtime.device, 0, &result);
     return check(result, "clCreateCommandQueue");
 }
 
 void printBuildLog(cl_program program, cl_device_id device)
 {
     std::size_t logSize = 0;
-    if (clGetProgramBuildInfo(
-            program, device, CL_PROGRAM_BUILD_LOG, 0, nullptr,
-            &logSize) != CL_SUCCESS ||
-        logSize == 0)
+    if (clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, 0, nullptr, &logSize) != CL_SUCCESS || logSize == 0)
     {
         return;
     }
 
     std::string log(logSize, '\0');
-    if (clGetProgramBuildInfo(
-            program, device, CL_PROGRAM_BUILD_LOG, log.size(),
-            &log[0], nullptr) == CL_SUCCESS)
+    if (clGetProgramBuildInfo(program, device, CL_PROGRAM_BUILD_LOG, log.size(), &log[0], nullptr) == CL_SUCCESS)
     {
         std::cerr << log << '\n';
     }
 }
 
-cl_program buildProgram(
-    const OpenCLRuntime& runtime,
-    const char* sourcePath)
+cl_program buildProgram(const OpenCLRuntime& runtime, const char* sourcePath)
 {
     const std::string source = readSource(sourcePath);
     if (source.empty())
@@ -150,18 +131,16 @@ cl_program buildProgram(
         return nullptr;
     }
 
-    const char* sourcePointer = source.c_str();
-    const std::size_t sourceLength = source.size();
-    cl_int result = CL_SUCCESS;
-    cl_program program = clCreateProgramWithSource(
-        runtime.context, 1, &sourcePointer, &sourceLength, &result);
+    const char*       sourcePointer = source.c_str();
+    const std::size_t sourceLength  = source.size();
+    cl_int            result        = CL_SUCCESS;
+    cl_program        program       = clCreateProgramWithSource(runtime.context, 1, &sourcePointer, &sourceLength, &result);
     if (!check(result, "clCreateProgramWithSource"))
     {
         return nullptr;
     }
 
-    result = clBuildProgram(
-        program, 1, &runtime.device, "-cl-std=CL1.2", nullptr, nullptr);
+    result = clBuildProgram(program, 1, &runtime.device, "-cl-std=CL1.2", nullptr, nullptr);
     if (result != CL_SUCCESS)
     {
         check(result, "clBuildProgram");
@@ -185,11 +164,7 @@ bool buildSource(const OpenCLRuntime& runtime, const char* sourcePath)
     return true;
 }
 
-bool executeKernel(
-    const OpenCLRuntime& runtime,
-    const char* sourcePath,
-    const std::vector<cl_int>& input,
-    std::vector<cl_int>& output)
+bool executeKernel(const OpenCLRuntime& runtime, const char* sourcePath, const std::vector<cl_int>& input, std::vector<cl_int>& output)
 {
     cl_program program = buildProgram(runtime, sourcePath);
     if (program == nullptr)
@@ -197,7 +172,7 @@ bool executeKernel(
         return false;
     }
 
-    cl_int result = CL_SUCCESS;
+    cl_int    result = CL_SUCCESS;
     cl_kernel kernel = clCreateKernel(program, "semantic_kernel", &result);
     if (!check(result, "clCreateKernel"))
     {
@@ -205,12 +180,7 @@ bool executeKernel(
         return false;
     }
 
-    cl_mem inputBuffer = clCreateBuffer(
-        runtime.context,
-        CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR,
-        input.size() * sizeof(input[0]),
-        const_cast<cl_int*>(input.data()),
-        &result);
+    cl_mem inputBuffer = clCreateBuffer(runtime.context, CL_MEM_READ_ONLY | CL_MEM_COPY_HOST_PTR, input.size() * sizeof(input[0]), const_cast<cl_int*>(input.data()), &result);
     if (!check(result, "clCreateBuffer"))
     {
         clReleaseKernel(kernel);
@@ -218,12 +188,7 @@ bool executeKernel(
         return false;
     }
 
-    cl_mem outputBuffer = clCreateBuffer(
-        runtime.context,
-        CL_MEM_WRITE_ONLY,
-        output.size() * sizeof(output[0]),
-        nullptr,
-        &result);
+    cl_mem outputBuffer = clCreateBuffer(runtime.context, CL_MEM_WRITE_ONLY, output.size() * sizeof(output[0]), nullptr, &result);
     if (!check(result, "clCreateBuffer"))
     {
         clReleaseMemObject(inputBuffer);
@@ -232,26 +197,14 @@ bool executeKernel(
         return false;
     }
 
-    constexpr std::size_t localWorkSize = 2;
-    bool success =
-        check(
-            clSetKernelArg(kernel, 0, sizeof(inputBuffer), &inputBuffer),
-            "clSetKernelArg(input)") &&
-        check(
-            clSetKernelArg(kernel, 1, sizeof(outputBuffer), &outputBuffer),
-            "clSetKernelArg(output)") &&
-        check(
-            clSetKernelArg(
-                kernel, 2, localWorkSize * sizeof(cl_int), nullptr),
-            "clSetKernelArg(scratch)");
-    const std::size_t globalWorkSize = output.size();
+    constexpr std::size_t localWorkSize  = 2;
+    bool                  success        = check(clSetKernelArg(kernel, 0, sizeof(inputBuffer), &inputBuffer), "clSetKernelArg(input)") &&
+                                           check(clSetKernelArg(kernel, 1, sizeof(outputBuffer), &outputBuffer), "clSetKernelArg(output)") &&
+                                           check(clSetKernelArg(kernel, 2, localWorkSize * sizeof(cl_int), nullptr), "clSetKernelArg(scratch)");
+    const std::size_t     globalWorkSize = output.size();
     if (success)
     {
-        success = check(
-            clEnqueueNDRangeKernel(
-                runtime.queue, kernel, 1, nullptr, &globalWorkSize,
-                &localWorkSize, 0, nullptr, nullptr),
-            "clEnqueueNDRangeKernel");
+        success = check(clEnqueueNDRangeKernel(runtime.queue, kernel, 1, nullptr, &globalWorkSize, &localWorkSize, 0, nullptr, nullptr), "clEnqueueNDRangeKernel");
     }
     if (success)
     {
@@ -259,12 +212,7 @@ bool executeKernel(
     }
     if (success)
     {
-        success = check(
-            clEnqueueReadBuffer(
-                runtime.queue, outputBuffer, CL_TRUE, 0,
-                output.size() * sizeof(output[0]), output.data(),
-                0, nullptr, nullptr),
-            "clEnqueueReadBuffer");
+        success = check(clEnqueueReadBuffer(runtime.queue, outputBuffer, CL_TRUE, 0, output.size() * sizeof(output[0]), output.data(), 0, nullptr, nullptr), "clEnqueueReadBuffer");
     }
 
     clReleaseMemObject(outputBuffer);
@@ -273,15 +221,14 @@ bool executeKernel(
     clReleaseProgram(program);
     return success;
 }
-} // namespace
+}  // namespace
 
 int main(int argc, char* argv[])
 {
     if (argc != 3)
     {
-        std::cerr
-            << "Usage: OpenCLSemanticRunner <original.cl> <obfuscated.cl>\n"
-            << "   or: OpenCLSemanticRunner --build <source.cl>\n";
+        std::cerr << "Usage: OpenCLSemanticRunner <original.cl> <obfuscated.cl>\n"
+                  << "   or: OpenCLSemanticRunner --build <source.cl>\n";
         return 2;
     }
 
@@ -303,19 +250,36 @@ int main(int argc, char* argv[])
     }
 
     const std::vector<cl_int> input = {
-        -4, -3, -2, -1,
-         0,  1,  2,  3,
-         3,  4,  5,  6,
-         9, 10, 11, 12,
-        10, 11, 12, 13,
-        15, 16, 17, 18,
+        -4,
+        -3,
+        -2,
+        -1,
+        0,
+        1,
+        2,
+        3,
+        3,
+        4,
+        5,
+        6,
+        9,
+        10,
+        11,
+        12,
+        10,
+        11,
+        12,
+        13,
+        15,
+        16,
+        17,
+        18,
     };
-    const std::vector<cl_int> expected = {9, -7, 45, 21, 67, 47};
-    std::vector<cl_int> originalResult(expected.size(), 0);
-    std::vector<cl_int> obfuscatedResult(expected.size(), 0);
+    const std::vector<cl_int> expected = { 9, -7, 45, 21, 67, 47 };
+    std::vector<cl_int>       originalResult(expected.size(), 0);
+    std::vector<cl_int>       obfuscatedResult(expected.size(), 0);
 
-    if (!executeKernel(runtime, argv[1], input, originalResult) ||
-        !executeKernel(runtime, argv[2], input, obfuscatedResult))
+    if (!executeKernel(runtime, argv[1], input, originalResult) || !executeKernel(runtime, argv[2], input, obfuscatedResult))
     {
         return 4;
     }

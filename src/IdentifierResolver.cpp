@@ -11,12 +11,11 @@
 
 namespace
 {
-const std::size_t noIndex = std::numeric_limits<std::size_t>::max();
+const std::size_t noIndex                = std::numeric_limits<std::size_t>::max();
 const std::size_t minGeneratedNameLength = 7;
 const std::size_t maxGeneratedNameLength = 1024;
 
-enum class SymbolKind
-{
+enum class SymbolKind {
     Variable,
     Parameter,
     Function,
@@ -25,8 +24,7 @@ enum class SymbolKind
     Field,
 };
 
-enum class TypeKind
-{
+enum class TypeKind {
     Unknown,
     Scalar,
     Vector,
@@ -35,31 +33,31 @@ enum class TypeKind
 
 struct TypeRef
 {
-    TypeKind kind = TypeKind::Unknown;
-    std::size_t structure = noIndex;
+    TypeKind     kind         = TypeKind::Unknown;
+    std::size_t  structure    = noIndex;
     unsigned int pointerDepth = 0;
 };
 
 struct SemanticToken
 {
     std::string text;
-    bool isIdentifier = false;
-    std::size_t sourceIndex = noIndex;
+    bool        isIdentifier = false;
+    std::size_t sourceIndex  = noIndex;
 };
 
 struct Symbol
 {
     std::string name;
-    SymbolKind kind = SymbolKind::Variable;
-    TypeRef type;
+    SymbolKind  kind = SymbolKind::Variable;
+    TypeRef     type;
     std::size_t declarationToken = noIndex;
-    std::size_t scope = noIndex;
-    bool renameable = true;
+    std::size_t scope            = noIndex;
+    bool        renameable       = true;
 };
 
 struct Scope
 {
-    std::size_t parent = noIndex;
+    std::size_t                                     parent = noIndex;
     std::map<std::string, std::vector<std::size_t>> names;
     std::map<std::string, std::vector<std::size_t>> tags;
 };
@@ -67,23 +65,22 @@ struct Scope
 struct Structure
 {
     std::map<std::string, std::size_t> fields;
-    bool fieldsParsed = false;
+    bool                               fieldsParsed = false;
 };
 
 struct ParsedType
 {
-    bool success = false;
-    bool isTypedef = false;
-    bool isKernel = false;
-    bool definedStructure = false;
-    TypeRef type;
+    bool        success          = false;
+    bool        isTypedef        = false;
+    bool        isKernel         = false;
+    bool        definedStructure = false;
+    TypeRef     type;
     std::size_t next = noIndex;
 };
 
 bool containsNewline(const std::string& text)
 {
-    return text.find('\n') != std::string::npos ||
-        text.find('\r') != std::string::npos;
+    return text.find('\n') != std::string::npos || text.find('\r') != std::string::npos;
 }
 
 bool isWhitespace(const std::string& text)
@@ -105,20 +102,14 @@ bool isWhitespace(const std::string& text)
 
 bool hasSuffix(const std::string& text, const std::string& suffix)
 {
-    return text.size() >= suffix.size() &&
-        text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
+    return text.size() >= suffix.size() && text.compare(text.size() - suffix.size(), suffix.size(), suffix) == 0;
 }
 
 class Resolver
 {
 public:
-    Resolver(
-        const std::vector<IdentifierSourceToken>& sourceTokens,
-        std::uint32_t seed)
-        : sourceTokens_(sourceTokens),
-          bindingBySource_(sourceTokens.size(), noIndex),
-          protectedSource_(sourceTokens.size(), false),
-          randomState_(seed == 0 ? 0x6d2b79f5u : seed)
+    Resolver(const std::vector<IdentifierSourceToken>& sourceTokens, std::uint32_t seed)
+        : sourceTokens_(sourceTokens), bindingBySource_(sourceTokens.size(), noIndex), protectedSource_(sourceTokens.size(), false), randomState_(seed == 0 ? 0x6d2b79f5u : seed)
     {
         for (const IdentifierSourceToken& token : sourceTokens_)
         {
@@ -142,51 +133,43 @@ public:
 
         std::vector<std::string> replacementBySource(sourceTokens_.size());
         std::vector<std::string> replacementBySymbol(symbols_.size());
-        for (std::size_t symbolIndex = 0;
-             symbolIndex < symbols_.size();
-             ++symbolIndex)
+        for (std::size_t symbolIndex = 0; symbolIndex < symbols_.size(); ++symbolIndex)
         {
-            if (!symbols_[symbolIndex].renameable ||
-                preprocessorReferences_.find(symbols_[symbolIndex].name) !=
-                    preprocessorReferences_.end())
+            if (!symbols_[symbolIndex].renameable || preprocessorReferences_.find(symbols_[symbolIndex].name) != preprocessorReferences_.end())
             {
                 continue;
             }
-            replacementBySymbol[symbolIndex] = makeUniqueName(
-                symbols_[symbolIndex].name);
+            replacementBySymbol[symbolIndex] = makeUniqueName(symbols_[symbolIndex].name);
         }
 
-        for (std::size_t sourceIndex = 0;
-             sourceIndex < bindingBySource_.size();
-             ++sourceIndex)
+        for (std::size_t sourceIndex = 0; sourceIndex < bindingBySource_.size(); ++sourceIndex)
         {
             const std::size_t symbolIndex = bindingBySource_[sourceIndex];
             if (symbolIndex != noIndex && !protectedSource_[sourceIndex])
             {
-                replacementBySource[sourceIndex] =
-                    replacementBySymbol[symbolIndex];
+                replacementBySource[sourceIndex] = replacementBySymbol[symbolIndex];
             }
         }
         return replacementBySource;
     }
 
 private:
-    const std::vector<IdentifierSourceToken>& sourceTokens_;
-    std::vector<SemanticToken> tokens_;
-    std::vector<std::size_t> bindingBySource_;
-    std::vector<bool> protectedSource_;
-    std::vector<std::size_t> matching_;
-    std::vector<bool> ignored_;
-    std::vector<unsigned int> forScopePush_;
-    std::vector<unsigned int> forScopePopAfter_;
+    const std::vector<IdentifierSourceToken>&       sourceTokens_;
+    std::vector<SemanticToken>                      tokens_;
+    std::vector<std::size_t>                        bindingBySource_;
+    std::vector<bool>                               protectedSource_;
+    std::vector<std::size_t>                        matching_;
+    std::vector<bool>                               ignored_;
+    std::vector<unsigned int>                       forScopePush_;
+    std::vector<unsigned int>                       forScopePopAfter_;
     std::map<std::size_t, std::vector<std::size_t>> parametersAtBody_;
-    std::vector<Scope> scopes_;
-    std::vector<Symbol> symbols_;
-    std::vector<Structure> structures_;
-    std::set<std::string> originalIdentifiers_;
-    std::set<std::string> generatedNames_;
-    std::set<std::string> preprocessorReferences_;
-    std::uint32_t randomState_;
+    std::vector<Scope>                              scopes_;
+    std::vector<Symbol>                             symbols_;
+    std::vector<Structure>                          structures_;
+    std::set<std::string>                           originalIdentifiers_;
+    std::set<std::string>                           generatedNames_;
+    std::set<std::string>                           preprocessorReferences_;
+    std::uint32_t                                   randomState_;
 
     static bool isIdentifierStart(char character)
     {
@@ -200,28 +183,22 @@ private:
         return std::isalnum(value) != 0 || character == '_';
     }
 
-    static void skipHorizontalWhitespace(
-        const std::string& text,
-        std::size_t& cursor)
+    static void skipHorizontalWhitespace(const std::string& text, std::size_t& cursor)
     {
-        while (cursor < text.size() &&
-               (text[cursor] == ' ' || text[cursor] == '\t'))
+        while (cursor < text.size() && (text[cursor] == ' ' || text[cursor] == '\t'))
         {
             ++cursor;
         }
     }
 
-    static std::string readIdentifier(
-        const std::string& text,
-        std::size_t& cursor)
+    static std::string readIdentifier(const std::string& text, std::size_t& cursor)
     {
         if (cursor >= text.size() || !isIdentifierStart(text[cursor]))
         {
             return std::string();
         }
         const std::size_t start = cursor++;
-        while (cursor < text.size() &&
-               isIdentifierContinuation(text[cursor]))
+        while (cursor < text.size() && isIdentifierContinuation(text[cursor]))
         {
             ++cursor;
         }
@@ -281,8 +258,7 @@ private:
                 continue;
             }
             const std::string identifier = readIdentifier(text, cursor);
-            if (identifier != macroName &&
-                macroParameters.find(identifier) == macroParameters.end())
+            if (identifier != macroName && macroParameters.find(identifier) == macroParameters.end())
             {
                 preprocessorReferences_.insert(identifier);
             }
@@ -291,13 +267,11 @@ private:
 
     void buildSemanticTokens()
     {
-        bool inString = false;
-        bool inDirective = false;
+        bool        inString    = false;
+        bool        inDirective = false;
         std::string lastDirectiveToken;
 
-        for (std::size_t sourceIndex = 0;
-             sourceIndex < sourceTokens_.size();
-             ++sourceIndex)
+        for (std::size_t sourceIndex = 0; sourceIndex < sourceTokens_.size(); ++sourceIndex)
         {
             const IdentifierSourceToken& token = sourceTokens_[sourceIndex];
 
@@ -326,7 +300,7 @@ private:
 
             if (!inString && token.text == "#")
             {
-                inDirective = true;
+                inDirective        = true;
                 lastDirectiveToken = token.text;
                 continue;
             }
@@ -341,8 +315,7 @@ private:
                 continue;
             }
 
-            tokens_.push_back(
-                SemanticToken{token.text, token.isIdentifier, sourceIndex});
+            tokens_.push_back(SemanticToken{ token.text, token.isIdentifier, sourceIndex });
         }
 
         ignored_.assign(tokens_.size(), false);
@@ -359,7 +332,7 @@ private:
 
         for (std::size_t index = 0; index < tokens_.size(); ++index)
         {
-            const std::string& text = tokens_[index].text;
+            const std::string&        text  = tokens_[index].text;
             std::vector<std::size_t>* stack = nullptr;
             if (text == "(")
             {
@@ -390,7 +363,7 @@ private:
             {
                 const std::size_t open = stack->back();
                 stack->pop_back();
-                matching_[open] = index;
+                matching_[open]  = index;
                 matching_[index] = open;
             }
         }
@@ -400,9 +373,7 @@ private:
     {
         for (std::size_t index = 0; index + 1 < tokens_.size(); ++index)
         {
-            if (tokens_[index].text != "for" ||
-                tokens_[index + 1].text != "(" ||
-                matching_[index + 1] == noIndex)
+            if (tokens_[index].text != "for" || tokens_[index + 1].text != "(" || matching_[index + 1] == noIndex)
             {
                 continue;
             }
@@ -420,8 +391,7 @@ private:
             }
             else
             {
-                while (end + 1 < tokens_.size() &&
-                       tokens_[end].text != ";")
+                while (end + 1 < tokens_.size() && tokens_[end].text != ";")
                 {
                     ++end;
                 }
@@ -434,31 +404,22 @@ private:
 
     static bool isTypeQualifier(const std::string& text)
     {
-        static const std::set<std::string> qualifiers = {
-            "const", "volatile", "restrict", "__global", "global",
-            "__local", "local", "__constant", "constant", "__private",
-            "private", "read_only", "write_only", "read_write",
-            "__read_only", "__write_only", "__read_write", "static",
-            "extern", "inline"};
+        static const std::set<std::string> qualifiers = { "const", "volatile", "restrict", "__global", "global", "__local", "local", "__constant", "constant", "__private",
+            "private", "read_only", "write_only", "read_write", "__read_only", "__write_only", "__read_write", "static", "extern", "inline" };
         return qualifiers.find(text) != qualifiers.end();
     }
 
     static bool isScalarType(const std::string& text)
     {
-        static const std::set<std::string> scalarTypes = {
-            "void", "bool", "char", "uchar", "short", "ushort", "int",
-            "uint", "long", "ulong", "half", "float", "double", "size_t",
-            "ptrdiff_t", "intptr_t", "uintptr_t", "unsigned", "signed"};
+        static const std::set<std::string> scalarTypes = { "void", "bool", "char", "uchar", "short", "ushort", "int", "uint", "long", "ulong", "half", "float", "double", "size_t",
+            "ptrdiff_t", "intptr_t", "uintptr_t", "unsigned", "signed" };
         return scalarTypes.find(text) != scalarTypes.end();
     }
 
     static bool isVectorType(const std::string& text)
     {
-        static const std::set<std::string> bases = {
-            "char", "uchar", "short", "ushort", "int", "uint", "long",
-            "ulong", "half", "float", "double"};
-        static const std::set<std::string> widths = {
-            "2", "3", "4", "8", "16"};
+        static const std::set<std::string> bases  = { "char", "uchar", "short", "ushort", "int", "uint", "long", "ulong", "half", "float", "double" };
+        static const std::set<std::string> widths = { "2", "3", "4", "8", "16" };
 
         for (const std::string& width : widths)
         {
@@ -473,12 +434,9 @@ private:
 
     static bool isKnownExternalType(const std::string& text)
     {
-        static const std::set<std::string> openClTypes = {
-            "atomic_int", "atomic_uint", "atomic_long", "atomic_ulong",
-            "atomic_float", "atomic_double", "atomic_flag", "memory_order",
-            "memory_scope", "cl_mem_fence_flags"};
-        return hasSuffix(text, "_t") ||
-            openClTypes.find(text) != openClTypes.end();
+        static const std::set<std::string> openClTypes = { "atomic_int", "atomic_uint", "atomic_long", "atomic_ulong", "atomic_float", "atomic_double", "atomic_flag",
+            "memory_order", "memory_scope", "cl_mem_fence_flags" };
+        return hasSuffix(text, "_t") || openClTypes.find(text) != openClTypes.end();
     }
 
     static bool isVectorSelector(const std::string& identifier)
@@ -488,16 +446,11 @@ private:
             return false;
         }
 
-        const bool xyzw = identifier.size() <= 4 &&
-            identifier.find_first_not_of("xyzw") == std::string::npos;
-        const bool rgba = identifier.size() <= 4 &&
-            identifier.find_first_not_of("rgba") == std::string::npos;
-        const bool hexadecimal = identifier.size() >= 2 &&
-            identifier.size() <= 17 && identifier.front() == 's' &&
-            identifier.find_first_not_of("0123456789abcdefABCDEF", 1) ==
-                std::string::npos;
-        const bool halfSelector = identifier == "lo" || identifier == "hi" ||
-            identifier == "even" || identifier == "odd";
+        const bool xyzw = identifier.size() <= 4 && identifier.find_first_not_of("xyzw") == std::string::npos;
+        const bool rgba = identifier.size() <= 4 && identifier.find_first_not_of("rgba") == std::string::npos;
+        const bool hexadecimal =
+            identifier.size() >= 2 && identifier.size() <= 17 && identifier.front() == 's' && identifier.find_first_not_of("0123456789abcdefABCDEF", 1) == std::string::npos;
+        const bool halfSelector = identifier == "lo" || identifier == "hi" || identifier == "even" || identifier == "odd";
         return xyzw || rgba || hexadecimal || halfSelector;
     }
 
@@ -519,20 +472,14 @@ private:
         scopes_[scope].names[symbols_[symbol].name].push_back(symbol);
     }
 
-    std::size_t createSymbol(
-        const std::string& name,
-        SymbolKind kind,
-        const TypeRef& type,
-        std::size_t declarationToken,
-        std::size_t scope,
-        bool renameable)
+    std::size_t createSymbol(const std::string& name, SymbolKind kind, const TypeRef& type, std::size_t declarationToken, std::size_t scope, bool renameable)
     {
         Symbol symbol;
-        symbol.name = name;
-        symbol.kind = kind;
-        symbol.type = type;
+        symbol.name             = name;
+        symbol.kind             = kind;
+        symbol.type             = type;
         symbol.declarationToken = declarationToken;
-        symbol.renameable = renameable;
+        symbol.renameable       = renameable;
         symbols_.push_back(symbol);
         const std::size_t result = symbols_.size() - 1;
         addSymbolToScope(scope, result);
@@ -556,19 +503,13 @@ private:
         return noIndex;
     }
 
-    std::size_t declareFunction(
-        std::size_t tokenIndex,
-        std::size_t scope,
-        const TypeRef& returnType,
-        bool kernel)
+    std::size_t declareFunction(std::size_t tokenIndex, std::size_t scope, const TypeRef& returnType, bool kernel)
     {
-        const std::string& name = tokens_[tokenIndex].text;
-        std::size_t symbol = findExactFunction(scope, name);
+        const std::string& name   = tokens_[tokenIndex].text;
+        std::size_t        symbol = findExactFunction(scope, name);
         if (symbol == noIndex)
         {
-            symbol = createSymbol(
-                name, SymbolKind::Function, returnType, tokenIndex, scope,
-                !kernel && name != "main");
+            symbol = createSymbol(name, SymbolKind::Function, returnType, tokenIndex, scope, !kernel && name != "main");
         }
         else if (kernel || name == "main")
         {
@@ -578,15 +519,9 @@ private:
         return symbol;
     }
 
-    std::size_t lookupName(
-        std::size_t scope,
-        const std::string& name,
-        std::size_t useToken,
-        bool typedefOnly = false) const
+    std::size_t lookupName(std::size_t scope, const std::string& name, std::size_t useToken, bool typedefOnly = false) const
     {
-        for (std::size_t current = scope;
-             current != noIndex;
-             current = scopes_[current].parent)
+        for (std::size_t current = scope; current != noIndex; current = scopes_[current].parent)
         {
             const auto found = scopes_[current].names.find(name);
             if (found == scopes_[current].names.end())
@@ -594,14 +529,10 @@ private:
                 continue;
             }
 
-            for (auto symbol = found->second.rbegin();
-                 symbol != found->second.rend();
-                 ++symbol)
+            for (auto symbol = found->second.rbegin(); symbol != found->second.rend(); ++symbol)
             {
                 const Symbol& candidate = symbols_[*symbol];
-                if (candidate.declarationToken <= useToken &&
-                    (!typedefOnly ||
-                     candidate.kind == SymbolKind::TypedefName))
+                if (candidate.declarationToken <= useToken && (!typedefOnly || candidate.kind == SymbolKind::TypedefName))
                 {
                     return *symbol;
                 }
@@ -610,23 +541,16 @@ private:
         return noIndex;
     }
 
-    std::size_t lookupTag(
-        std::size_t scope,
-        const std::string& name,
-        std::size_t useToken) const
+    std::size_t lookupTag(std::size_t scope, const std::string& name, std::size_t useToken) const
     {
-        for (std::size_t current = scope;
-             current != noIndex;
-             current = scopes_[current].parent)
+        for (std::size_t current = scope; current != noIndex; current = scopes_[current].parent)
         {
             const auto found = scopes_[current].tags.find(name);
             if (found == scopes_[current].tags.end())
             {
                 continue;
             }
-            for (auto symbol = found->second.rbegin();
-                 symbol != found->second.rend();
-                 ++symbol)
+            for (auto symbol = found->second.rbegin(); symbol != found->second.rend(); ++symbol)
             {
                 if (symbols_[*symbol].declarationToken <= useToken)
                 {
@@ -655,28 +579,24 @@ private:
         return bindingBySource_[tokens_[tokenIndex].sourceIndex];
     }
 
-    std::size_t findOrCreateTag(
-        std::size_t tokenIndex,
-        std::size_t scope,
-        bool definition)
+    std::size_t findOrCreateTag(std::size_t tokenIndex, std::size_t scope, bool definition)
     {
         const std::string& name = tokens_[tokenIndex].text;
-        std::size_t tag = lookupTag(scope, name, tokenIndex);
+        std::size_t        tag  = lookupTag(scope, name, tokenIndex);
         if (tag == noIndex)
         {
             TypeRef tagType;
             tagType.kind = TypeKind::Structure;
             structures_.push_back(Structure{});
-            tagType.structure = structures_.size() - 1;
-            tag = createSymbol(
-                name, SymbolKind::StructTag, tagType, tokenIndex, noIndex, true);
+            tagType.structure   = structures_.size() - 1;
+            tag                 = createSymbol(name, SymbolKind::StructTag, tagType, tokenIndex, noIndex, true);
             symbols_[tag].scope = scope;
             scopes_[scope].tags[name].push_back(tag);
         }
         else if (definition && symbols_[tag].type.structure == noIndex)
         {
             structures_.push_back(Structure{});
-            symbols_[tag].type.kind = TypeKind::Structure;
+            symbols_[tag].type.kind      = TypeKind::Structure;
             symbols_[tag].type.structure = structures_.size() - 1;
         }
         bind(tokenIndex, tag);
@@ -685,35 +605,29 @@ private:
 
     bool looksLikeExternalType(std::size_t index, std::size_t end) const
     {
-        if (!tokens_[index].isIdentifier ||
-            !isKnownExternalType(tokens_[index].text))
+        if (!tokens_[index].isIdentifier || !isKnownExternalType(tokens_[index].text))
         {
             return false;
         }
 
         std::size_t next = index + 1;
-        while (next < end &&
-               (tokens_[next].text == "*" ||
-                isTypeQualifier(tokens_[next].text)))
+        while (next < end && (tokens_[next].text == "*" || isTypeQualifier(tokens_[next].text)))
         {
             ++next;
         }
         return next < end && tokens_[next].isIdentifier;
     }
 
-    ParsedType parseType(
-        std::size_t start,
-        std::size_t end,
-        std::size_t scope)
+    ParsedType parseType(std::size_t start, std::size_t end, std::size_t scope)
     {
         ParsedType parsed;
-        parsed.next = start;
+        parsed.next      = start;
         bool sawBaseType = false;
 
         while (parsed.next < end)
         {
-            const std::size_t index = parsed.next;
-            const std::string& text = tokens_[index].text;
+            const std::size_t  index = parsed.next;
+            const std::string& text  = tokens_[index].text;
 
             if (text == "typedef")
             {
@@ -735,7 +649,7 @@ private:
             if (isVectorType(text))
             {
                 parsed.type.kind = TypeKind::Vector;
-                sawBaseType = true;
+                sawBaseType      = true;
                 ++parsed.next;
                 continue;
             }
@@ -756,27 +670,24 @@ private:
                 std::size_t structure = noIndex;
                 if (parsed.next < end && tokens_[parsed.next].isIdentifier)
                 {
-                    const std::size_t tagToken = parsed.next;
-                    const bool definition = tagToken + 1 < end &&
-                        tokens_[tagToken + 1].text == "{";
-                    const std::size_t tag = findOrCreateTag(
-                        tagToken, scope, definition);
-                    structure = symbols_[tag].type.structure;
+                    const std::size_t tagToken   = parsed.next;
+                    const bool        definition = tagToken + 1 < end && tokens_[tagToken + 1].text == "{";
+                    const std::size_t tag        = findOrCreateTag(tagToken, scope, definition);
+                    structure                    = symbols_[tag].type.structure;
                     ++parsed.next;
                 }
 
-                if (parsed.next < end && tokens_[parsed.next].text == "{" &&
-                    matching_[parsed.next] != noIndex)
+                if (parsed.next < end && tokens_[parsed.next].text == "{" && matching_[parsed.next] != noIndex)
                 {
-                    const std::size_t open = parsed.next;
+                    const std::size_t open  = parsed.next;
                     const std::size_t close = matching_[open];
                     if (structure == noIndex)
                     {
                         structures_.push_back(Structure{});
                         structure = structures_.size() - 1;
                     }
-                    parsed.type.kind = TypeKind::Structure;
-                    parsed.type.structure = structure;
+                    parsed.type.kind        = TypeKind::Structure;
+                    parsed.type.structure   = structure;
                     parsed.definedStructure = true;
 
                     for (std::size_t ignored = open; ignored <= close; ++ignored)
@@ -792,15 +703,14 @@ private:
                 }
                 else
                 {
-                    parsed.type.kind = TypeKind::Structure;
+                    parsed.type.kind      = TypeKind::Structure;
                     parsed.type.structure = structure;
                 }
                 continue;
             }
             if (tokens_[index].isIdentifier && !sawBaseType)
             {
-                const std::size_t alias = lookupName(
-                    scope, text, index, true);
+                const std::size_t alias = lookupName(scope, text, index, true);
                 if (alias != noIndex)
                 {
                     bind(index, alias);
@@ -811,9 +721,9 @@ private:
                 }
                 if (looksLikeExternalType(index, end))
                 {
-                    parsed.type.kind = TypeKind::Unknown;
+                    parsed.type.kind                             = TypeKind::Unknown;
                     protectedSource_[tokens_[index].sourceIndex] = true;
-                    sawBaseType = true;
+                    sawBaseType                                  = true;
                     ++parsed.next;
                     continue;
                 }
@@ -825,11 +735,7 @@ private:
         return parsed;
     }
 
-    void parseStructureFields(
-        std::size_t begin,
-        std::size_t end,
-        std::size_t structure,
-        std::size_t scope)
+    void parseStructureFields(std::size_t begin, std::size_t end, std::size_t structure, std::size_t scope)
     {
         std::size_t index = begin;
         while (index < end)
@@ -841,14 +747,12 @@ private:
                 continue;
             }
 
-            std::size_t cursor = parsed.next;
-            bool declaredAny = false;
+            std::size_t cursor      = parsed.next;
+            bool        declaredAny = false;
             while (cursor < end)
             {
                 TypeRef fieldType = parsed.type;
-                while (cursor < end &&
-                       (tokens_[cursor].text == "*" ||
-                        isTypeQualifier(tokens_[cursor].text)))
+                while (cursor < end && (tokens_[cursor].text == "*" || isTypeQualifier(tokens_[cursor].text)))
                 {
                     if (tokens_[cursor].text == "*")
                     {
@@ -861,23 +765,20 @@ private:
                     break;
                 }
 
-                const std::size_t field = createSymbol(
-                    tokens_[cursor].text, SymbolKind::Field, fieldType,
-                    cursor, noIndex, true);
+                const std::size_t field                             = createSymbol(tokens_[cursor].text, SymbolKind::Field, fieldType, cursor, noIndex, true);
                 structures_[structure].fields[tokens_[cursor].text] = field;
                 bind(cursor, field);
                 declaredAny = true;
                 ++cursor;
 
-                while (cursor < end && tokens_[cursor].text == "[" &&
-                       matching_[cursor] != noIndex)
+                while (cursor < end && tokens_[cursor].text == "[" && matching_[cursor] != noIndex)
                 {
                     cursor = matching_[cursor] + 1;
                 }
 
                 int parentheses = 0;
-                int braces = 0;
-                int brackets = 0;
+                int braces      = 0;
+                int brackets    = 0;
                 while (cursor < end)
                 {
                     const std::string& text = tokens_[cursor].text;
@@ -905,8 +806,7 @@ private:
                     {
                         --brackets;
                     }
-                    else if (parentheses == 0 && braces == 0 && brackets == 0 &&
-                             (text == "," || text == ";"))
+                    else if (parentheses == 0 && braces == 0 && brackets == 0 && (text == "," || text == ";"))
                     {
                         break;
                     }
@@ -939,19 +839,16 @@ private:
         }
     }
 
-    std::vector<std::size_t> parseParameters(
-        std::size_t begin,
-        std::size_t end,
-        std::size_t declarationScope)
+    std::vector<std::size_t> parseParameters(std::size_t begin, std::size_t end, std::size_t declarationScope)
     {
         std::vector<std::size_t> parameters;
-        std::size_t segmentStart = begin;
+        std::size_t              segmentStart = begin;
 
         while (segmentStart < end)
         {
-            std::size_t segmentEnd = segmentStart;
-            int parentheses = 0;
-            int brackets = 0;
+            std::size_t segmentEnd  = segmentStart;
+            int         parentheses = 0;
+            int         brackets    = 0;
             while (segmentEnd < end)
             {
                 const std::string& text = tokens_[segmentEnd].text;
@@ -978,15 +875,12 @@ private:
                 ++segmentEnd;
             }
 
-            ParsedType parsed = parseType(
-                segmentStart, segmentEnd, declarationScope);
+            ParsedType parsed = parseType(segmentStart, segmentEnd, declarationScope);
             if (parsed.success)
             {
-                TypeRef parameterType = parsed.type;
-                std::size_t cursor = parsed.next;
-                while (cursor < segmentEnd &&
-                       (tokens_[cursor].text == "*" ||
-                        isTypeQualifier(tokens_[cursor].text)))
+                TypeRef     parameterType = parsed.type;
+                std::size_t cursor        = parsed.next;
+                while (cursor < segmentEnd && (tokens_[cursor].text == "*" || isTypeQualifier(tokens_[cursor].text)))
                 {
                     if (tokens_[cursor].text == "*")
                     {
@@ -996,9 +890,7 @@ private:
                 }
                 if (cursor < segmentEnd && tokens_[cursor].isIdentifier)
                 {
-                    const std::size_t parameter = createSymbol(
-                        tokens_[cursor].text, SymbolKind::Parameter,
-                        parameterType, cursor, noIndex, true);
+                    const std::size_t parameter = createSymbol(tokens_[cursor].text, SymbolKind::Parameter, parameterType, cursor, noIndex, true);
                     bind(cursor, parameter);
                     parameters.push_back(parameter);
                 }
@@ -1009,10 +901,7 @@ private:
         return parameters;
     }
 
-    bool tryParseDeclaration(
-        std::size_t start,
-        std::size_t scope,
-        std::size_t& consumedEnd)
+    bool tryParseDeclaration(std::size_t start, std::size_t scope, std::size_t& consumedEnd)
     {
         ParsedType parsed = parseType(start, tokens_.size(), scope);
         if (!parsed.success)
@@ -1021,8 +910,7 @@ private:
         }
 
         std::size_t cursor = parsed.next;
-        if (cursor < tokens_.size() && tokens_[cursor].text == ";" &&
-            parsed.definedStructure)
+        if (cursor < tokens_.size() && tokens_[cursor].text == ";" && parsed.definedStructure)
         {
             consumedEnd = cursor;
             return true;
@@ -1032,9 +920,7 @@ private:
         while (cursor < tokens_.size())
         {
             TypeRef declaredType = parsed.type;
-            while (cursor < tokens_.size() &&
-                   (tokens_[cursor].text == "*" ||
-                    isTypeQualifier(tokens_[cursor].text)))
+            while (cursor < tokens_.size() && (tokens_[cursor].text == "*" || isTypeQualifier(tokens_[cursor].text)))
             {
                 if (tokens_[cursor].text == "*")
                 {
@@ -1049,22 +935,19 @@ private:
             }
 
             const std::size_t declarationToken = cursor;
-            const std::string name = tokens_[cursor].text;
+            const std::string name             = tokens_[cursor].text;
             ++cursor;
 
-            if (!parsed.isTypedef && cursor < tokens_.size() &&
-                tokens_[cursor].text == "(" && matching_[cursor] != noIndex)
+            if (!parsed.isTypedef && cursor < tokens_.size() && tokens_[cursor].text == "(" && matching_[cursor] != noIndex)
             {
-                declareFunction(
-                    declarationToken, scope, declaredType, parsed.isKernel);
-                const std::size_t closeParenthesis = matching_[cursor];
-                const std::vector<std::size_t> parameters = parseParameters(
-                    cursor + 1, closeParenthesis, scope);
-                const std::size_t after = closeParenthesis + 1;
+                declareFunction(declarationToken, scope, declaredType, parsed.isKernel);
+                const std::size_t              closeParenthesis = matching_[cursor];
+                const std::vector<std::size_t> parameters       = parseParameters(cursor + 1, closeParenthesis, scope);
+                const std::size_t              after            = closeParenthesis + 1;
                 if (after < tokens_.size() && tokens_[after].text == "{")
                 {
                     parametersAtBody_[after] = parameters;
-                    consumedEnd = closeParenthesis;
+                    consumedEnd              = closeParenthesis;
                 }
                 else if (after < tokens_.size() && tokens_[after].text == ";")
                 {
@@ -1077,23 +960,19 @@ private:
                 return true;
             }
 
-            const SymbolKind kind = parsed.isTypedef
-                ? SymbolKind::TypedefName
-                : SymbolKind::Variable;
-            const std::size_t symbol = createSymbol(
-                name, kind, declaredType, declarationToken, scope, true);
+            const SymbolKind  kind   = parsed.isTypedef ? SymbolKind::TypedefName : SymbolKind::Variable;
+            const std::size_t symbol = createSymbol(name, kind, declaredType, declarationToken, scope, true);
             bind(declarationToken, symbol);
             declaredAny = true;
 
-            while (cursor < tokens_.size() && tokens_[cursor].text == "[" &&
-                   matching_[cursor] != noIndex)
+            while (cursor < tokens_.size() && tokens_[cursor].text == "[" && matching_[cursor] != noIndex)
             {
                 cursor = matching_[cursor] + 1;
             }
 
             int parentheses = 0;
-            int braces = 0;
-            int brackets = 0;
+            int braces      = 0;
+            int brackets    = 0;
             while (cursor < tokens_.size())
             {
                 const std::string& text = tokens_[cursor].text;
@@ -1129,8 +1008,7 @@ private:
                 {
                     --brackets;
                 }
-                else if (parentheses == 0 && braces == 0 && brackets == 0 &&
-                         (text == "," || text == ";"))
+                else if (parentheses == 0 && braces == 0 && brackets == 0 && (text == "," || text == ";"))
                 {
                     break;
                 }
@@ -1172,15 +1050,13 @@ private:
                 return unknown;
             }
         }
-        else if (tokens_[cursor].text == ")" &&
-                 matching_[cursor] != noIndex)
+        else if (tokens_[cursor].text == ")" && matching_[cursor] != noIndex)
         {
             const std::size_t open = matching_[cursor];
             if (open > 0 && tokens_[open - 1].isIdentifier)
             {
                 const std::size_t function = binding(open - 1);
-                if (function != noIndex &&
-                    symbols_[function].kind == SymbolKind::Function)
+                if (function != noIndex && symbols_[function].kind == SymbolKind::Function)
                 {
                     return symbols_[function].type;
                 }
@@ -1211,22 +1087,17 @@ private:
 
     void resolveIdentifier(std::size_t index, std::size_t scope)
     {
-        if (!tokens_[index].isIdentifier || binding(index) != noIndex ||
-            protectedSource_[tokens_[index].sourceIndex])
+        if (!tokens_[index].isIdentifier || binding(index) != noIndex || protectedSource_[tokens_[index].sourceIndex])
         {
             return;
         }
 
-        if (index > 0 &&
-            (tokens_[index - 1].text == "." ||
-             tokens_[index - 1].text == "->"))
+        if (index > 0 && (tokens_[index - 1].text == "." || tokens_[index - 1].text == "->"))
         {
             const TypeRef baseType = inferTypeBefore(index - 1);
-            if (baseType.kind == TypeKind::Structure &&
-                baseType.structure != noIndex)
+            if (baseType.kind == TypeKind::Structure && baseType.structure != noIndex)
             {
-                const auto field = structures_[baseType.structure].fields.find(
-                    tokens_[index].text);
+                const auto field = structures_[baseType.structure].fields.find(tokens_[index].text);
                 if (field != structures_[baseType.structure].fields.end())
                 {
                     bind(index, field->second);
@@ -1234,26 +1105,21 @@ private:
                 return;
             }
 
-            if (baseType.kind == TypeKind::Vector &&
-                isVectorSelector(tokens_[index].text))
+            if (baseType.kind == TypeKind::Vector && isVectorSelector(tokens_[index].text))
             {
                 protectedSource_[tokens_[index].sourceIndex] = true;
             }
             return;
         }
 
-        const std::size_t symbol = lookupName(
-            scope, tokens_[index].text, index);
+        const std::size_t symbol = lookupName(scope, tokens_[index].text, index);
         if (symbol != noIndex)
         {
             bind(index, symbol);
         }
     }
 
-    void resolveRange(
-        std::size_t begin,
-        std::size_t end,
-        std::size_t scope)
+    void resolveRange(std::size_t begin, std::size_t end, std::size_t scope)
     {
         if (tokens_.empty())
         {
@@ -1272,15 +1138,11 @@ private:
     bool canStartDeclaration(std::size_t index, std::size_t scope) const
     {
         const std::string& text = tokens_[index].text;
-        if (text == "typedef" || text == "struct" || text == "union" ||
-            text == "__kernel" || text == "kernel" ||
-            isTypeQualifier(text) || isScalarType(text) || isVectorType(text))
+        if (text == "typedef" || text == "struct" || text == "union" || text == "__kernel" || text == "kernel" || isTypeQualifier(text) || isScalarType(text) || isVectorType(text))
         {
             return true;
         }
-        return tokens_[index].isIdentifier &&
-            (lookupName(scope, text, index, true) != noIndex ||
-             isKnownExternalType(text));
+        return tokens_[index].isIdentifier && (lookupName(scope, text, index, true) != noIndex || isKnownExternalType(text));
     }
 
     void scan()
@@ -1321,9 +1183,7 @@ private:
                 {
                     scopeStack.pop_back();
                 }
-                for (unsigned int count = 0;
-                     count < forScopePopAfter_[index] && scopeStack.size() > 1;
-                     ++count)
+                for (unsigned int count = 0; count < forScopePopAfter_[index] && scopeStack.size() > 1; ++count)
                 {
                     scopeStack.pop_back();
                 }
@@ -1338,11 +1198,8 @@ private:
                 if (tryParseDeclaration(index, currentScope, consumedEnd))
                 {
                     resolveRange(index, consumedEnd, currentScope);
-                    const unsigned int scopesToPop =
-                        forScopePopAfter_[consumedEnd];
-                    for (unsigned int count = 0;
-                         count < scopesToPop && scopeStack.size() > 1;
-                         ++count)
+                    const unsigned int scopesToPop = forScopePopAfter_[consumedEnd];
+                    for (unsigned int count = 0; count < scopesToPop && scopeStack.size() > 1; ++count)
                     {
                         scopeStack.pop_back();
                     }
@@ -1353,9 +1210,7 @@ private:
 
             resolveIdentifier(index, currentScope);
 
-            for (unsigned int count = 0;
-                 count < forScopePopAfter_[index] && scopeStack.size() > 1;
-                 ++count)
+            for (unsigned int count = 0; count < forScopePopAfter_[index] && scopeStack.size() > 1; ++count)
             {
                 scopeStack.pop_back();
             }
@@ -1379,11 +1234,8 @@ private:
 
         for (std::size_t index = 0; index + 1 < tokens_.size(); ++index)
         {
-            if (!tokens_[index].isIdentifier || binding(index) != noIndex ||
-                tokens_[index + 1].text != "(" ||
-                (index > 0 &&
-                 (tokens_[index - 1].text == "." ||
-                  tokens_[index - 1].text == "->")))
+            if (!tokens_[index].isIdentifier || binding(index) != noIndex || tokens_[index + 1].text != "(" ||
+                (index > 0 && (tokens_[index - 1].text == "." || tokens_[index - 1].text == "->")))
             {
                 continue;
             }
@@ -1397,29 +1249,22 @@ private:
 
     std::string makeUniqueName(const std::string& original)
     {
-        static const char alphanumeric[] =
-            "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
-        static const char alphabetic[] =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        static const char alphanumeric[] = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+        static const char alphabetic[]   = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
-        const std::size_t length = std::max<std::size_t>(
-            1, (minGeneratedNameLength + original.size()) %
-                   maxGeneratedNameLength);
-        std::string result;
+        const std::size_t length = std::max<std::size_t>(1, (minGeneratedNameLength + original.size()) % maxGeneratedNameLength);
+        std::string       result;
         do
         {
             result.clear();
             result.reserve(length);
             for (std::size_t index = 0; index < length; ++index)
             {
-                const char* alphabet = index == 0 ? alphabetic : alphanumeric;
-                const std::size_t alphabetSize = index == 0
-                    ? sizeof(alphabetic) - 1
-                    : sizeof(alphanumeric) - 1;
+                const char*       alphabet     = index == 0 ? alphabetic : alphanumeric;
+                const std::size_t alphabetSize = index == 0 ? sizeof(alphabetic) - 1 : sizeof(alphanumeric) - 1;
                 result.push_back(alphabet[nextRandom() % alphabetSize]);
             }
-        } while (originalIdentifiers_.find(result) != originalIdentifiers_.end() ||
-                 generatedNames_.find(result) != generatedNames_.end());
+        } while (originalIdentifiers_.find(result) != originalIdentifiers_.end() || generatedNames_.find(result) != generatedNames_.end());
 
         generatedNames_.insert(result);
         return result;
@@ -1433,11 +1278,9 @@ private:
         return randomState_;
     }
 };
-}
+}  // namespace
 
-std::vector<std::string> ResolveIdentifierNames(
-    const std::vector<IdentifierSourceToken>& sourceTokens,
-    std::uint32_t seed)
+std::vector<std::string> ResolveIdentifierNames(const std::vector<IdentifierSourceToken>& sourceTokens, std::uint32_t seed)
 {
     Resolver resolver(sourceTokens, seed);
     return resolver.run();

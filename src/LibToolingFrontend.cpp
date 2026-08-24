@@ -77,9 +77,7 @@ bool isIdentifierCharacter(char character)
     return std::isalnum(value) != 0 || character == '_';
 }
 
-void collectIdentifiers(
-    llvm::StringRef text,
-    std::set<std::string>& destination)
+void collectIdentifiers(llvm::StringRef text, std::set<std::string>& destination)
 {
     std::size_t index = 0;
     while (index < text.size())
@@ -108,42 +106,29 @@ std::set<std::string> collectSourceIdentifiers(const std::string& source)
 
 struct SkippedIdentifier
 {
-    std::string spelling;
+    std::string  spelling;
     unsigned int length = 0;
 };
 
-bool isPreprocessorDirectiveLine(
-    const std::string& source,
-    std::size_t offset)
+bool isPreprocessorDirectiveLine(const std::string& source, std::size_t offset)
 {
     if (offset >= source.size())
     {
         return false;
     }
 
-    const std::size_t precedingNewline =
-        offset == 0 ? std::string::npos : source.rfind('\n', offset - 1);
-    std::size_t lineStart = precedingNewline == std::string::npos
-        ? 0
-        : precedingNewline + 1;
+    const std::size_t precedingNewline = offset == 0 ? std::string::npos : source.rfind('\n', offset - 1);
+    std::size_t       lineStart        = precedingNewline == std::string::npos ? 0 : precedingNewline + 1;
 
     for (;;)
     {
         std::size_t first = lineStart;
-        while (first < source.size() &&
-               (source[first] == ' ' || source[first] == '\t' ||
-                source[first] == '\v' || source[first] == '\f' ||
-                source[first] == '\r'))
+        while (first < source.size() && (source[first] == ' ' || source[first] == '\t' || source[first] == '\v' || source[first] == '\f' || source[first] == '\r'))
         {
             ++first;
         }
-        const bool startsDirective = first < source.size() &&
-            (source[first] == '#' ||
-             (first + 1 < source.size() &&
-              source[first] == '%' && source[first + 1] == ':') ||
-             (first + 2 < source.size() &&
-              source[first] == '?' && source[first + 1] == '?' &&
-              source[first + 2] == '='));
+        const bool startsDirective = first < source.size() && (source[first] == '#' || (first + 1 < source.size() && source[first] == '%' && source[first + 1] == ':') ||
+                                                                  (first + 2 < source.size() && source[first] == '?' && source[first + 1] == '?' && source[first + 2] == '='));
         if (startsDirective)
         {
             return true;
@@ -155,44 +140,27 @@ bool isPreprocessorDirectiveLine(
         }
 
         const std::size_t previousNewline = lineStart - 1;
-        std::size_t previousEnd = previousNewline;
-        while (previousEnd > 0 &&
-               (source[previousEnd - 1] == ' ' ||
-                source[previousEnd - 1] == '\t' ||
-                source[previousEnd - 1] == '\v' ||
-                source[previousEnd - 1] == '\f' ||
-                source[previousEnd - 1] == '\r'))
+        std::size_t       previousEnd     = previousNewline;
+        while (previousEnd > 0 && (source[previousEnd - 1] == ' ' || source[previousEnd - 1] == '\t' || source[previousEnd - 1] == '\v' || source[previousEnd - 1] == '\f' ||
+                                      source[previousEnd - 1] == '\r'))
         {
             --previousEnd;
         }
-        const bool continued = previousEnd > 0 &&
-            (source[previousEnd - 1] == '\\' ||
-             (previousEnd >= 3 &&
-              source[previousEnd - 3] == '?' &&
-              source[previousEnd - 2] == '?' &&
-              source[previousEnd - 1] == '/'));
+        const bool continued = previousEnd > 0 && (source[previousEnd - 1] == '\\' ||
+                                                      (previousEnd >= 3 && source[previousEnd - 3] == '?' && source[previousEnd - 2] == '?' && source[previousEnd - 1] == '/'));
         if (!continued)
         {
             return false;
         }
 
-        const std::size_t earlierNewline = previousNewline == 0
-            ? std::string::npos
-            : source.rfind('\n', previousNewline - 1);
-        lineStart = earlierNewline == std::string::npos
-            ? 0
-            : earlierNewline + 1;
+        const std::size_t earlierNewline = previousNewline == 0 ? std::string::npos : source.rfind('\n', previousNewline - 1);
+        lineStart                        = earlierNewline == std::string::npos ? 0 : earlierNewline + 1;
     }
 }
 
-void collectSkippedIdentifiers(
-    llvm::StringRef text,
-    unsigned int baseOffset,
-    const std::string& source,
-    std::map<unsigned int, SkippedIdentifier>& destination)
+void collectSkippedIdentifiers(llvm::StringRef text, unsigned int baseOffset, const std::string& source, std::map<unsigned int, SkippedIdentifier>& destination)
 {
-    enum class ScanState
-    {
+    enum class ScanState {
         Normal,
         LineComment,
         BlockComment,
@@ -200,12 +168,12 @@ void collectSkippedIdentifiers(
         CharacterLiteral,
     };
 
-    ScanState state = ScanState::Normal;
+    ScanState   state = ScanState::Normal;
     std::size_t index = 0;
     while (index < text.size())
     {
         const char current = text[index];
-        const char next = index + 1 < text.size() ? text[index + 1] : '\0';
+        const char next    = index + 1 < text.size() ? text[index + 1] : '\0';
 
         if (state == ScanState::LineComment)
         {
@@ -229,12 +197,9 @@ void collectSkippedIdentifiers(
             }
             continue;
         }
-        if (state == ScanState::StringLiteral ||
-            state == ScanState::CharacterLiteral)
+        if (state == ScanState::StringLiteral || state == ScanState::CharacterLiteral)
         {
-            const char terminator = state == ScanState::StringLiteral
-                ? '"'
-                : '\'';
+            const char terminator = state == ScanState::StringLiteral ? '"' : '\'';
             if (current == '\\' && index + 1 < text.size())
             {
                 index += 2;
@@ -286,24 +251,15 @@ void collectSkippedIdentifiers(
             ++index;
         }
 
-        const std::size_t absoluteOffset =
-            static_cast<std::size_t>(baseOffset) + start;
-        if (absoluteOffset >
-                static_cast<std::size_t>(
-                    std::numeric_limits<unsigned int>::max()) ||
-            isPreprocessorDirectiveLine(source, absoluteOffset))
+        const std::size_t absoluteOffset = static_cast<std::size_t>(baseOffset) + start;
+        if (absoluteOffset > static_cast<std::size_t>(std::numeric_limits<unsigned int>::max()) || isPreprocessorDirectiveLine(source, absoluteOffset))
         {
             continue;
         }
 
-        const unsigned int tokenOffset =
-            static_cast<unsigned int>(absoluteOffset);
-        const unsigned int tokenLength =
-            static_cast<unsigned int>(index - start);
-        destination.emplace(
-            tokenOffset,
-            SkippedIdentifier{
-                text.substr(start, index - start).str(), tokenLength});
+        const unsigned int tokenOffset = static_cast<unsigned int>(absoluteOffset);
+        const unsigned int tokenLength = static_cast<unsigned int>(index - start);
+        destination.emplace(tokenOffset, SkippedIdentifier{ text.substr(start, index - start).str(), tokenLength });
     }
 }
 
@@ -315,24 +271,19 @@ std::uint32_t nextRandom(std::uint32_t& state)
     return state;
 }
 
-std::string makeUniqueName(
-    std::uint32_t& randomState,
-    std::set<std::string>& reserved)
+std::string makeUniqueName(std::uint32_t& randomState, std::set<std::string>& reserved)
 {
-    static const char firstCharacters[] = "lIO";
+    static const char firstCharacters[]     = "lIO";
     static const char remainingCharacters[] = "lIO01";
     for (;;)
     {
         const std::size_t length = 10 + (nextRandom(randomState) % 7);
-        std::string candidate;
+        std::string       candidate;
         candidate.reserve(length);
-        candidate.push_back(firstCharacters[
-            nextRandom(randomState) % (sizeof(firstCharacters) - 1)]);
+        candidate.push_back(firstCharacters[nextRandom(randomState) % (sizeof(firstCharacters) - 1)]);
         while (candidate.size() < length)
         {
-            candidate.push_back(remainingCharacters[
-                nextRandom(randomState) %
-                    (sizeof(remainingCharacters) - 1)]);
+            candidate.push_back(remainingCharacters[nextRandom(randomState) % (sizeof(remainingCharacters) - 1)]);
         }
         if (reserved.insert(candidate).second)
         {
@@ -351,55 +302,43 @@ std::string unsignedLiteral(std::uint32_t value)
 std::string opaquePredicate(std::uint32_t seed, std::uint32_t index)
 {
     const std::uint32_t predicateSeed = seed ^ (index * 0x85ebca6bu);
-    const std::uint32_t payloadLeft = predicateSeed ^ 0xa5a5a5a5u;
-    const std::uint32_t payloadRight = predicateSeed ^ 0x5a5a5a5au;
-    const std::string seedLiteral = unsignedLiteral(predicateSeed);
+    const std::uint32_t payloadLeft   = predicateSeed ^ 0xa5a5a5a5u;
+    const std::uint32_t payloadRight  = predicateSeed ^ 0x5a5a5a5au;
+    const std::string   seedLiteral   = unsignedLiteral(predicateSeed);
 
-    return "if(((" + seedLiteral + "*(" + seedLiteral +
-        "+1u))&1u)!=0u){(void)(" + unsignedLiteral(payloadLeft) +
-        "^" + unsignedLiteral(payloadRight) + ");}";
+    return "if(((" + seedLiteral + "*(" + seedLiteral + "+1u))&1u)!=0u){(void)(" + unsignedLiteral(payloadLeft) + "^" + unsignedLiteral(payloadRight) + ");}";
 }
 
 struct FrontendState
 {
-    FrontendState(
-        const std::string& inputPathValue,
-        const std::string& sourceValue,
-        const LibToolingFrontendOptions& optionsValue)
-        : inputPath(inputPathValue),
-          source(sourceValue),
-          options(optionsValue)
-    {
-    }
+    FrontendState(const std::string& inputPathValue, const std::string& sourceValue, const LibToolingFrontendOptions& optionsValue)
+        : inputPath(inputPathValue), source(sourceValue), options(optionsValue)
+    {}
 
-    const std::string& inputPath;
-    const std::string& source;
-    const LibToolingFrontendOptions& options;
-    std::set<std::string> preprocessorProtectedNames;
+    const std::string&                        inputPath;
+    const std::string&                        source;
+    const LibToolingFrontendOptions&          options;
+    std::set<std::string>                     preprocessorProtectedNames;
     std::map<unsigned int, SkippedIdentifier> skippedIdentifiers;
-    clang::tooling::Replacements replacements;
-    std::string transformedSource;
-    std::string internalError;
-    bool completed = false;
+    clang::tooling::Replacements              replacements;
+    std::string                               transformedSource;
+    std::string                               internalError;
+    bool                                      completed = false;
 };
 
-SourceLocation editableSpellingLocation(
-    SourceLocation location,
-    const SourceManager& sourceManager)
+SourceLocation editableSpellingLocation(SourceLocation location, const SourceManager& sourceManager)
 {
     if (location.isInvalid())
     {
         return {};
     }
-    if (location.isMacroID() &&
-        !sourceManager.isMacroArgExpansion(location))
+    if (location.isMacroID() && !sourceManager.isMacroArgExpansion(location))
     {
         return {};
     }
 
     const SourceLocation spelling = sourceManager.getSpellingLoc(location);
-    if (spelling.isInvalid() ||
-        !sourceManager.isWrittenInMainFile(spelling))
+    if (spelling.isInvalid() || !sourceManager.isWrittenInMainFile(spelling))
     {
         return {};
     }
@@ -417,13 +356,8 @@ const NamedDecl* canonicalNamedDecl(const NamedDecl* declaration)
 
 bool isRenameableDeclaration(const NamedDecl* declaration)
 {
-    return llvm::isa<FunctionDecl>(declaration) ||
-        llvm::isa<VarDecl>(declaration) ||
-        llvm::isa<FieldDecl>(declaration) ||
-        llvm::isa<TypedefNameDecl>(declaration) ||
-        llvm::isa<RecordDecl>(declaration) ||
-        llvm::isa<EnumDecl>(declaration) ||
-        llvm::isa<EnumConstantDecl>(declaration);
+    return llvm::isa<FunctionDecl>(declaration) || llvm::isa<VarDecl>(declaration) || llvm::isa<FieldDecl>(declaration) || llvm::isa<TypedefNameDecl>(declaration) ||
+           llvm::isa<RecordDecl>(declaration) || llvm::isa<EnumDecl>(declaration) || llvm::isa<EnumConstantDecl>(declaration);
 }
 
 bool isKernelFunction(const NamedDecl* declaration)
@@ -435,8 +369,7 @@ bool isKernelFunction(const NamedDecl* declaration)
     }
 #if CLANG_VERSION_MAJOR >= 21
     const auto* attribute = function->getAttr<clang::DeviceKernelAttr>();
-    return attribute != nullptr &&
-        clang::DeviceKernelAttr::isOpenCLSpelling(attribute);
+    return attribute != nullptr && clang::DeviceKernelAttr::isOpenCLSpelling(attribute);
 #else
     return function->hasAttr<clang::OpenCLKernelAttr>();
 #endif
@@ -454,10 +387,10 @@ const TypedefNameDecl* typedefDeclaration(TypedefTypeLoc location)
 struct Symbol
 {
     const NamedDecl* declaration = nullptr;
-    std::string spelling;
-    unsigned int declarationOffset = 0;
-    bool renameable = true;
-    std::string replacement;
+    std::string      spelling;
+    unsigned int     declarationOffset = 0;
+    bool             renameable        = true;
+    std::string      replacement;
 };
 
 using SymbolMap = std::map<const NamedDecl*, Symbol>;
@@ -465,34 +398,24 @@ using SymbolMap = std::map<const NamedDecl*, Symbol>;
 class PreprocessorTracker final : public clang::PPCallbacks
 {
 public:
-    PreprocessorTracker(
-        const SourceManager& sourceManager,
-        const LangOptions& languageOptions,
-        FrontendState& state)
-        : sourceManager_(sourceManager),
-          languageOptions_(languageOptions),
-          state_(state)
-    {
-    }
+    PreprocessorTracker(const SourceManager& sourceManager, const LangOptions& languageOptions, FrontendState& state)
+        : sourceManager_(sourceManager), languageOptions_(languageOptions), state_(state)
+    {}
 
-    void MacroDefined(
-        const clang::Token& macroName,
-        const clang::MacroDirective* directive) override
+    void MacroDefined(const clang::Token& macroName, const clang::MacroDirective* directive) override
     {
         if (directive == nullptr || directive->getMacroInfo() == nullptr)
         {
             return;
         }
 
-        const SourceLocation definitionLocation =
-            sourceManager_.getSpellingLoc(macroName.getLocation());
-        if (definitionLocation.isInvalid() ||
-            sourceManager_.isInSystemHeader(definitionLocation))
+        const SourceLocation definitionLocation = sourceManager_.getSpellingLoc(macroName.getLocation());
+        if (definitionLocation.isInvalid() || sourceManager_.isInSystemHeader(definitionLocation))
         {
             return;
         }
 
-        const clang::MacroInfo& macro = *directive->getMacroInfo();
+        const clang::MacroInfo&                macro = *directive->getMacroInfo();
         std::set<const clang::IdentifierInfo*> parameters;
         for (const clang::IdentifierInfo* parameter : macro.params())
         {
@@ -501,74 +424,50 @@ public:
 
         for (const clang::Token& token : macro.tokens())
         {
-            const clang::IdentifierInfo* identifier =
-                token.getIdentifierInfo();
-            if (identifier != nullptr &&
-                parameters.find(identifier) == parameters.end())
+            const clang::IdentifierInfo* identifier = token.getIdentifierInfo();
+            if (identifier != nullptr && parameters.find(identifier) == parameters.end())
             {
-                state_.preprocessorProtectedNames.insert(
-                    identifier->getName().str());
+                state_.preprocessorProtectedNames.insert(identifier->getName().str());
             }
         }
     }
 
-    void SourceRangeSkipped(
-        SourceRange range,
-        SourceLocation) override
+    void SourceRangeSkipped(SourceRange range, SourceLocation) override
     {
-        const SourceLocation begin = sourceManager_.getSpellingLoc(
-            range.getBegin());
-        const SourceLocation end = sourceManager_.getSpellingLoc(
-            range.getEnd());
-        if (begin.isInvalid() || end.isInvalid() ||
-            !sourceManager_.isWrittenInMainFile(begin) ||
-            !sourceManager_.isWrittenInMainFile(end))
+        const SourceLocation begin = sourceManager_.getSpellingLoc(range.getBegin());
+        const SourceLocation end   = sourceManager_.getSpellingLoc(range.getEnd());
+        if (begin.isInvalid() || end.isInvalid() || !sourceManager_.isWrittenInMainFile(begin) || !sourceManager_.isWrittenInMainFile(end))
         {
             return;
         }
 
-        bool invalid = false;
-        const llvm::StringRef text = clang::Lexer::getSourceText(
-            CharSourceRange::getTokenRange(begin, end),
-            sourceManager_,
-            languageOptions_,
-            &invalid);
+        bool                  invalid = false;
+        const llvm::StringRef text    = clang::Lexer::getSourceText(CharSourceRange::getTokenRange(begin, end), sourceManager_, languageOptions_, &invalid);
         if (!invalid)
         {
-            collectSkippedIdentifiers(
-                text,
-                sourceManager_.getFileOffset(begin),
-                state_.source,
-                state_.skippedIdentifiers);
+            collectSkippedIdentifiers(text, sourceManager_.getFileOffset(begin), state_.source, state_.skippedIdentifiers);
         }
     }
 
 private:
     const SourceManager& sourceManager_;
-    const LangOptions& languageOptions_;
-    FrontendState& state_;
+    const LangOptions&   languageOptions_;
+    FrontendState&       state_;
 };
 
-class SymbolCollector final
-    : public clang::RecursiveASTVisitor<SymbolCollector>
+class SymbolCollector final : public clang::RecursiveASTVisitor<SymbolCollector>
 {
 public:
-    SymbolCollector(ASTContext& context, FrontendState& state)
-        : sourceManager_(context.getSourceManager()), state_(state)
-    {
-    }
+    SymbolCollector(ASTContext& context, FrontendState& state) : sourceManager_(context.getSourceManager()), state_(state) {}
 
     bool VisitNamedDecl(NamedDecl* declaration)
     {
-        if (declaration == nullptr || declaration->isImplicit() ||
-            declaration->getIdentifier() == nullptr ||
-            !isRenameableDeclaration(declaration))
+        if (declaration == nullptr || declaration->isImplicit() || declaration->getIdentifier() == nullptr || !isRenameableDeclaration(declaration))
         {
             return true;
         }
 
-        const SourceLocation location = editableSpellingLocation(
-            declaration->getLocation(), sourceManager_);
+        const SourceLocation location = editableSpellingLocation(declaration->getLocation(), sourceManager_);
         if (location.isInvalid())
         {
             return true;
@@ -580,48 +479,35 @@ public:
             return true;
         }
 
-        const std::string spelling = declaration->getNameAsString();
-        const bool renameable = !isKernelFunction(declaration) &&
-            state_.preprocessorProtectedNames.find(spelling) ==
-                state_.preprocessorProtectedNames.end();
-        const unsigned int offset = sourceManager_.getFileOffset(location);
+        const std::string  spelling   = declaration->getNameAsString();
+        const bool         renameable = !isKernelFunction(declaration) && state_.preprocessorProtectedNames.find(spelling) == state_.preprocessorProtectedNames.end();
+        const unsigned int offset     = sourceManager_.getFileOffset(location);
 
         const auto existing = symbols_.find(canonical);
         if (existing == symbols_.end())
         {
-            symbols_.emplace(
-                canonical,
-                Symbol{canonical, spelling, offset, renameable, {}});
+            symbols_.emplace(canonical, Symbol{ canonical, spelling, offset, renameable, {} });
         }
         else
         {
-            existing->second.declarationOffset = std::min(
-                existing->second.declarationOffset, offset);
-            existing->second.renameable =
-                existing->second.renameable && renameable;
+            existing->second.declarationOffset = std::min(existing->second.declarationOffset, offset);
+            existing->second.renameable        = existing->second.renameable && renameable;
         }
         return true;
     }
 
-    SymbolMap takeSymbols()
-    {
-        return std::move(symbols_);
-    }
+    SymbolMap takeSymbols() { return std::move(symbols_); }
 
 private:
     const SourceManager& sourceManager_;
-    FrontendState& state_;
-    SymbolMap symbols_;
+    FrontendState&       state_;
+    SymbolMap            symbols_;
 };
 
-class ReferenceProtector final
-    : public clang::RecursiveASTVisitor<ReferenceProtector>
+class ReferenceProtector final : public clang::RecursiveASTVisitor<ReferenceProtector>
 {
 public:
-    ReferenceProtector(const SourceManager& sourceManager, SymbolMap& symbols)
-        : sourceManager_(sourceManager), symbols_(symbols)
-    {
-    }
+    ReferenceProtector(const SourceManager& sourceManager, SymbolMap& symbols) : sourceManager_(sourceManager), symbols_(symbols) {}
 
     bool VisitNamedDecl(NamedDecl* declaration)
     {
@@ -658,14 +544,11 @@ public:
 
     bool VisitDesignatedInitExpr(DesignatedInitExpr* expression)
     {
-        for (const DesignatedInitExpr::Designator& designator :
-             expression->designators())
+        for (const DesignatedInitExpr::Designator& designator : expression->designators())
         {
             if (designator.isFieldDesignator())
             {
-                protect(
-                    designator.getFieldDecl(),
-                    designator.getFieldLoc());
+                protect(designator.getFieldDecl(), designator.getFieldLoc());
             }
         }
         return true;
@@ -675,22 +558,18 @@ private:
     void protect(const NamedDecl* declaration, SourceLocation location)
     {
         const NamedDecl* canonical = canonicalNamedDecl(declaration);
-        const auto symbol = symbols_.find(canonical);
-        if (symbol != symbols_.end() &&
-            editableSpellingLocation(location, sourceManager_).isInvalid())
+        const auto       symbol    = symbols_.find(canonical);
+        if (symbol != symbols_.end() && editableSpellingLocation(location, sourceManager_).isInvalid())
         {
             symbol->second.renameable = false;
         }
     }
 
     const SourceManager& sourceManager_;
-    SymbolMap& symbols_;
+    SymbolMap&           symbols_;
 };
 
-void assignGeneratedNames(
-    SymbolMap& symbols,
-    std::uint32_t seed,
-    std::set<std::string>& reserved)
+void assignGeneratedNames(SymbolMap& symbols, std::uint32_t seed, std::set<std::string>& reserved)
 {
     std::vector<Symbol*> ordered;
     for (auto& entry : symbols)
@@ -700,11 +579,7 @@ void assignGeneratedNames(
             ordered.push_back(&entry.second);
         }
     }
-    std::sort(
-        ordered.begin(), ordered.end(),
-        [](const Symbol* left, const Symbol* right) {
-            return left->declarationOffset < right->declarationOffset;
-        });
+    std::sort(ordered.begin(), ordered.end(), [](const Symbol* left, const Symbol* right) { return left->declarationOffset < right->declarationOffset; });
 
     std::uint32_t randomState = seed == 0 ? 0x6d2b79f5u : seed;
     for (Symbol* symbol : ordered)
@@ -713,9 +588,7 @@ void assignGeneratedNames(
     }
 }
 
-void protectAmbiguousSkippedSymbols(
-    SymbolMap& symbols,
-    const FrontendState& state)
+void protectAmbiguousSkippedSymbols(SymbolMap& symbols, const FrontendState& state)
 {
     std::set<std::string> skippedSpellings;
     for (const auto& occurrence : state.skippedIdentifiers)
@@ -727,8 +600,7 @@ void protectAmbiguousSkippedSymbols(
     for (auto& entry : symbols)
     {
         Symbol& symbol = entry.second;
-        if (skippedSpellings.find(symbol.spelling) !=
-            skippedSpellings.end())
+        if (skippedSpellings.find(symbol.spelling) != skippedSpellings.end())
         {
             symbolsBySpelling[symbol.spelling].push_back(&symbol);
         }
@@ -746,24 +618,19 @@ void protectAmbiguousSkippedSymbols(
     }
 }
 
-void addSkippedIdentifierReplacements(
-    const SourceManager& sourceManager,
-    const SymbolMap& symbols,
-    FrontendState& state)
+void addSkippedIdentifierReplacements(const SourceManager& sourceManager, const SymbolMap& symbols, FrontendState& state)
 {
     std::map<std::string, const Symbol*> uniqueSymbols;
-    std::set<std::string> ambiguousSpellings;
+    std::set<std::string>                ambiguousSpellings;
     for (const auto& entry : symbols)
     {
         const Symbol& symbol = entry.second;
-        if (ambiguousSpellings.find(symbol.spelling) !=
-            ambiguousSpellings.end())
+        if (ambiguousSpellings.find(symbol.spelling) != ambiguousSpellings.end())
         {
             continue;
         }
 
-        const auto inserted = uniqueSymbols.emplace(
-            symbol.spelling, &symbol);
+        const auto inserted = uniqueSymbols.emplace(symbol.spelling, &symbol);
         if (!inserted.second)
         {
             uniqueSymbols.erase(inserted.first);
@@ -771,19 +638,16 @@ void addSkippedIdentifierReplacements(
         }
     }
 
-    const SourceLocation fileStart = sourceManager.getLocForStartOfFile(
-        sourceManager.getMainFileID());
+    const SourceLocation fileStart = sourceManager.getLocForStartOfFile(sourceManager.getMainFileID());
     for (const auto& occurrence : state.skippedIdentifiers)
     {
         const auto symbol = uniqueSymbols.find(occurrence.second.spelling);
-        if (symbol == uniqueSymbols.end() ||
-            symbol->second->replacement.empty())
+        if (symbol == uniqueSymbols.end() || symbol->second->replacement.empty())
         {
             continue;
         }
 
-        if (occurrence.first > static_cast<unsigned int>(
-                std::numeric_limits<int>::max()))
+        if (occurrence.first > static_cast<unsigned int>(std::numeric_limits<int>::max()))
         {
             state.internalError =
                 "LibTooling skipped-branch offset exceeds the supported "
@@ -791,13 +655,8 @@ void addSkippedIdentifierReplacements(
             return;
         }
 
-        const SourceLocation location = fileStart.getLocWithOffset(
-            static_cast<int>(occurrence.first));
-        clang::tooling::Replacement replacement(
-            sourceManager,
-            location,
-            occurrence.second.length,
-            symbol->second->replacement);
+        const SourceLocation        location = fileStart.getLocWithOffset(static_cast<int>(occurrence.first));
+        clang::tooling::Replacement replacement(sourceManager, location, occurrence.second.length, symbol->second->replacement);
         if (!replacement.isApplicable())
         {
             state.internalError =
@@ -809,27 +668,19 @@ void addSkippedIdentifierReplacements(
         {
             state.internalError =
                 "LibTooling produced conflicting skipped-branch "
-                "replacements: " + llvm::toString(std::move(error));
+                "replacements: " +
+                llvm::toString(std::move(error));
             return;
         }
     }
 }
 
-class ReplacementCollector final
-    : public clang::RecursiveASTVisitor<ReplacementCollector>
+class ReplacementCollector final : public clang::RecursiveASTVisitor<ReplacementCollector>
 {
 public:
-    ReplacementCollector(
-        ASTContext& context,
-        const SymbolMap& symbols,
-        FrontendState& state)
-        : sourceManager_(context.getSourceManager()),
-          languageOptions_(context.getLangOpts()),
-          symbols_(symbols),
-          state_(state),
-          opaqueIndex_(0)
-    {
-    }
+    ReplacementCollector(ASTContext& context, const SymbolMap& symbols, FrontendState& state)
+        : sourceManager_(context.getSourceManager()), languageOptions_(context.getLangOpts()), symbols_(symbols), state_(state), opaqueIndex_(0)
+    {}
 
     bool VisitNamedDecl(NamedDecl* declaration)
     {
@@ -842,22 +693,19 @@ public:
 
     bool VisitDeclRefExpr(DeclRefExpr* expression)
     {
-        addSymbolReplacement(
-            expression->getDecl(), expression->getLocation());
+        addSymbolReplacement(expression->getDecl(), expression->getLocation());
         return !hasFailed();
     }
 
     bool VisitMemberExpr(MemberExpr* expression)
     {
-        addSymbolReplacement(
-            expression->getMemberDecl(), expression->getMemberLoc());
+        addSymbolReplacement(expression->getMemberDecl(), expression->getMemberLoc());
         return !hasFailed();
     }
 
     bool VisitTypedefTypeLoc(TypedefTypeLoc location)
     {
-        addSymbolReplacement(
-            typedefDeclaration(location), location.getNameLoc());
+        addSymbolReplacement(typedefDeclaration(location), location.getNameLoc());
         return !hasFailed();
     }
 
@@ -869,14 +717,11 @@ public:
 
     bool VisitDesignatedInitExpr(DesignatedInitExpr* expression)
     {
-        for (const DesignatedInitExpr::Designator& designator :
-             expression->designators())
+        for (const DesignatedInitExpr::Designator& designator : expression->designators())
         {
             if (designator.isFieldDesignator())
             {
-                addSymbolReplacement(
-                    designator.getFieldDecl(),
-                    designator.getFieldLoc());
+                addSymbolReplacement(designator.getFieldDecl(), designator.getFieldLoc());
             }
         }
         return !hasFailed();
@@ -889,43 +734,31 @@ public:
             return !hasFailed();
         }
 
-        const auto* body = llvm::dyn_cast_or_null<clang::CompoundStmt>(
-            statement->getThen());
+        const auto* body = llvm::dyn_cast_or_null<clang::CompoundStmt>(statement->getThen());
         if (body == nullptr)
         {
             return true;
         }
 
-        const SourceLocation brace = editableSpellingLocation(
-            body->getLBracLoc(), sourceManager_);
+        const SourceLocation brace = editableSpellingLocation(body->getLBracLoc(), sourceManager_);
         if (brace.isInvalid())
         {
             return true;
         }
 
-        const unsigned int tokenLength = clang::Lexer::MeasureTokenLength(
-            brace, sourceManager_, languageOptions_);
+        const unsigned int tokenLength = clang::Lexer::MeasureTokenLength(brace, sourceManager_, languageOptions_);
         if (tokenLength == 0)
         {
             return true;
         }
 
         const SourceLocation insertion = brace.getLocWithOffset(tokenLength);
-        addReplacement(
-            insertion,
-            0,
-            opaquePredicate(
-                state_.options.seed == 0
-                    ? 0x6d2b79f5u
-                    : state_.options.seed,
-                opaqueIndex_++));
+        addReplacement(insertion, 0, opaquePredicate(state_.options.seed == 0 ? 0x6d2b79f5u : state_.options.seed, opaqueIndex_++));
         return !hasFailed();
     }
 
 private:
-    void addSymbolReplacement(
-        const NamedDecl* declaration,
-        SourceLocation location)
+    void addSymbolReplacement(const NamedDecl* declaration, SourceLocation location)
     {
         if (declaration == nullptr || hasFailed())
         {
@@ -938,15 +771,13 @@ private:
             return;
         }
 
-        const SourceLocation spelling = editableSpellingLocation(
-            location, sourceManager_);
+        const SourceLocation spelling = editableSpellingLocation(location, sourceManager_);
         if (spelling.isInvalid())
         {
             return;
         }
 
-        const unsigned int length = clang::Lexer::MeasureTokenLength(
-            spelling, sourceManager_, languageOptions_);
+        const unsigned int length = clang::Lexer::MeasureTokenLength(spelling, sourceManager_, languageOptions_);
         if (length == 0)
         {
             return;
@@ -954,46 +785,34 @@ private:
         addReplacement(spelling, length, symbol->second.replacement);
     }
 
-    void addReplacement(
-        SourceLocation location,
-        unsigned int length,
-        const std::string& replacementText)
+    void addReplacement(SourceLocation location, unsigned int length, const std::string& replacementText)
     {
-        clang::tooling::Replacement replacement(
-            sourceManager_, location, length, replacementText);
+        clang::tooling::Replacement replacement(sourceManager_, location, length, replacementText);
         if (!replacement.isApplicable())
         {
-            state_.internalError =
-                "LibTooling produced an inapplicable source replacement";
+            state_.internalError = "LibTooling produced an inapplicable source replacement";
             return;
         }
 
         if (llvm::Error error = state_.replacements.add(replacement))
         {
-            state_.internalError =
-                "LibTooling produced conflicting source replacements: " +
-                llvm::toString(std::move(error));
+            state_.internalError = "LibTooling produced conflicting source replacements: " + llvm::toString(std::move(error));
         }
     }
 
-    bool hasFailed() const
-    {
-        return !state_.internalError.empty();
-    }
+    bool hasFailed() const { return !state_.internalError.empty(); }
 
     const SourceManager& sourceManager_;
-    const LangOptions& languageOptions_;
-    const SymbolMap& symbols_;
-    FrontendState& state_;
-    std::uint32_t opaqueIndex_;
+    const LangOptions&   languageOptions_;
+    const SymbolMap&     symbols_;
+    FrontendState&       state_;
+    std::uint32_t        opaqueIndex_;
 };
 
 class SemanticASTConsumer final : public clang::ASTConsumer
 {
 public:
-    explicit SemanticASTConsumer(FrontendState& state) : state_(state)
-    {
-    }
+    explicit SemanticASTConsumer(FrontendState& state) : state_(state) {}
 
     void HandleTranslationUnit(ASTContext& context) override
     {
@@ -1021,26 +840,21 @@ public:
             return;
         }
 
-        addSkippedIdentifierReplacements(
-            context.getSourceManager(), symbols, state_);
+        addSkippedIdentifierReplacements(context.getSourceManager(), symbols, state_);
         if (!state_.internalError.empty())
         {
             return;
         }
 
-        llvm::Expected<std::string> transformed =
-            clang::tooling::applyAllReplacements(
-                state_.source, state_.replacements);
+        llvm::Expected<std::string> transformed = clang::tooling::applyAllReplacements(state_.source, state_.replacements);
         if (!transformed)
         {
-            state_.internalError =
-                "LibTooling could not apply source replacements: " +
-                llvm::toString(transformed.takeError());
+            state_.internalError = "LibTooling could not apply source replacements: " + llvm::toString(transformed.takeError());
             return;
         }
 
         state_.transformedSource = std::move(*transformed);
-        state_.completed = true;
+        state_.completed         = true;
     }
 
 private:
@@ -1050,44 +864,26 @@ private:
 class SemanticFrontendAction final : public clang::ASTFrontendAction
 {
 public:
-    explicit SemanticFrontendAction(FrontendState& state) : state_(state)
-    {
-    }
+    explicit SemanticFrontendAction(FrontendState& state) : state_(state) {}
 
     bool BeginSourceFileAction(clang::CompilerInstance& compiler) override
     {
-        compiler.getPreprocessor().addPPCallbacks(
-            std::make_unique<PreprocessorTracker>(
-                compiler.getSourceManager(),
-                compiler.getLangOpts(),
-                state_));
+        compiler.getPreprocessor().addPPCallbacks(std::make_unique<PreprocessorTracker>(compiler.getSourceManager(), compiler.getLangOpts(), state_));
         return true;
     }
 
-    std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(
-        clang::CompilerInstance&,
-        llvm::StringRef) override
-    {
-        return std::make_unique<SemanticASTConsumer>(state_);
-    }
+    std::unique_ptr<clang::ASTConsumer> CreateASTConsumer(clang::CompilerInstance&, llvm::StringRef) override { return std::make_unique<SemanticASTConsumer>(state_); }
 
 private:
     FrontendState& state_;
 };
 
-class SemanticFrontendActionFactory final
-    : public clang::tooling::FrontendActionFactory
+class SemanticFrontendActionFactory final : public clang::tooling::FrontendActionFactory
 {
 public:
-    explicit SemanticFrontendActionFactory(FrontendState& state)
-        : state_(state)
-    {
-    }
+    explicit SemanticFrontendActionFactory(FrontendState& state) : state_(state) {}
 
-    std::unique_ptr<clang::FrontendAction> create() override
-    {
-        return std::make_unique<SemanticFrontendAction>(state_);
-    }
+    std::unique_ptr<clang::FrontendAction> create() override { return std::make_unique<SemanticFrontendAction>(state_); }
 
 private:
     FrontendState& state_;
@@ -1097,18 +893,18 @@ const char* diagnosticLevelName(clang::DiagnosticsEngine::Level level)
 {
     switch (level)
     {
-        case clang::DiagnosticsEngine::Ignored:
-            return "ignored";
-        case clang::DiagnosticsEngine::Note:
-            return "note";
-        case clang::DiagnosticsEngine::Remark:
-            return "remark";
-        case clang::DiagnosticsEngine::Warning:
-            return "warning";
-        case clang::DiagnosticsEngine::Error:
-            return "error";
-        case clang::DiagnosticsEngine::Fatal:
-            return "fatal error";
+    case clang::DiagnosticsEngine::Ignored:
+        return "ignored";
+    case clang::DiagnosticsEngine::Note:
+        return "note";
+    case clang::DiagnosticsEngine::Remark:
+        return "remark";
+    case clang::DiagnosticsEngine::Warning:
+        return "warning";
+    case clang::DiagnosticsEngine::Error:
+        return "error";
+    case clang::DiagnosticsEngine::Fatal:
+        return "fatal error";
     }
     return "diagnostic";
 }
@@ -1116,16 +912,9 @@ const char* diagnosticLevelName(clang::DiagnosticsEngine::Level level)
 class CapturingDiagnosticConsumer final : public DiagnosticConsumer
 {
 public:
-    CapturingDiagnosticConsumer(
-        const std::string& inputPath,
-        const std::string& source)
-        : inputPath_(inputPath), source_(source)
-    {
-    }
+    CapturingDiagnosticConsumer(const std::string& inputPath, const std::string& source) : inputPath_(inputPath), source_(source) {}
 
-    void HandleDiagnostic(
-        clang::DiagnosticsEngine::Level level,
-        const Diagnostic& information) override
+    void HandleDiagnostic(clang::DiagnosticsEngine::Level level, const Diagnostic& information) override
     {
         DiagnosticConsumer::HandleDiagnostic(level, information);
         if (level >= clang::DiagnosticsEngine::Error)
@@ -1143,16 +932,11 @@ public:
         const SourceLocation location = information.getLocation();
         if (location.isValid() && information.hasSourceManager())
         {
-            const SourceManager& sourceManager =
-                information.getSourceManager();
-            const SourceLocation spelling = sourceManager.getSpellingLoc(
-                location);
-            const unsigned int line = sourceManager.getSpellingLineNumber(
-                spelling);
-            const unsigned int column = sourceManager.getSpellingColumnNumber(
-                spelling);
-            const bool inMainFile =
-                sourceManager.isWrittenInMainFile(spelling);
+            const SourceManager& sourceManager = information.getSourceManager();
+            const SourceLocation spelling      = sourceManager.getSpellingLoc(location);
+            const unsigned int   line          = sourceManager.getSpellingLineNumber(spelling);
+            const unsigned int   column        = sourceManager.getSpellingColumnNumber(spelling);
+            const bool           inMainFile    = sourceManager.isWrittenInMainFile(spelling);
 
             if (inMainFile)
             {
@@ -1160,11 +944,9 @@ public:
             }
             else
             {
-                output_ << sourceManager.getFilename(spelling).str()
-                        << ':' << line << ':' << column << ": ";
+                output_ << sourceManager.getFilename(spelling).str() << ':' << line << ':' << column << ": ";
             }
-            output_ << diagnosticLevelName(level) << ": "
-                    << message.str().str() << '\n';
+            output_ << diagnosticLevelName(level) << ": " << message.str().str() << '\n';
 
             if (inMainFile)
             {
@@ -1173,20 +955,13 @@ public:
         }
         else
         {
-            output_ << diagnosticLevelName(level) << ": "
-                    << message.str().str() << '\n';
+            output_ << diagnosticLevelName(level) << ": " << message.str().str() << '\n';
         }
     }
 
-    bool hasErrors() const
-    {
-        return hasErrors_;
-    }
+    bool hasErrors() const { return hasErrors_; }
 
-    std::string str() const
-    {
-        return output_.str();
-    }
+    std::string str() const { return output_.str(); }
 
 private:
     void appendSourceLine(unsigned int line, unsigned int column)
@@ -1197,9 +972,7 @@ private:
         }
 
         std::size_t lineStart = 0;
-        for (unsigned int currentLine = 1;
-             currentLine < line && lineStart < source_.size();
-             ++currentLine)
+        for (unsigned int currentLine = 1; currentLine < line && lineStart < source_.size(); ++currentLine)
         {
             const std::size_t newline = source_.find('\n', lineStart);
             if (newline == std::string::npos)
@@ -1219,16 +992,12 @@ private:
             --lineEnd;
         }
 
-        output_ << "    " << source_.substr(lineStart, lineEnd - lineStart)
-                << '\n' << "    ";
+        output_ << "    " << source_.substr(lineStart, lineEnd - lineStart) << '\n' << "    ";
         const unsigned int caretColumn = column == 0 ? 1 : column;
         for (unsigned int index = 1; index < caretColumn; ++index)
         {
             const std::size_t sourceIndex = lineStart + index - 1;
-            output_ << (sourceIndex < source_.size() &&
-                        source_[sourceIndex] == '\t'
-                            ? '\t'
-                            : ' ');
+            output_ << (sourceIndex < source_.size() && source_[sourceIndex] == '\t' ? '\t' : ' ');
         }
         output_ << "^\n";
     }
@@ -1236,7 +1005,7 @@ private:
     const std::string& inputPath_;
     const std::string& source_;
     std::ostringstream output_;
-    bool hasErrors_ = false;
+    bool               hasErrors_ = false;
 };
 
 std::string absolutePath(const std::string& path)
@@ -1249,28 +1018,23 @@ std::string absolutePath(const std::string& path)
     llvm::sys::path::remove_dots(absolute, true);
     return absolute.str().str();
 }
-} // namespace
+}  // namespace
 
 bool HasLibToolingFrontend()
 {
     return true;
 }
 
-LibToolingFrontendResult RunLibToolingFrontend(
-    const std::string& inputPath,
-    const std::string& source,
-    const LibToolingFrontendOptions& options)
+LibToolingFrontendResult RunLibToolingFrontend(const std::string& inputPath, const std::string& source, const LibToolingFrontendOptions& options)
 {
     LibToolingFrontendResult result;
-    if (source.size() > static_cast<std::size_t>(
-            std::numeric_limits<unsigned int>::max()))
+    if (source.size() > static_cast<std::size_t>(std::numeric_limits<unsigned int>::max()))
     {
-        result.diagnostics =
-            "The input is too large for LibTooling source offsets.";
+        result.diagnostics = "The input is too large for LibTooling source offsets.";
         return result;
     }
 
-    const std::string canonicalInputPath = absolutePath(inputPath);
+    const std::string      canonicalInputPath = absolutePath(inputPath);
     llvm::SmallString<256> workingDirectory(canonicalInputPath);
     llvm::sys::path::remove_filename(workingDirectory);
     if (workingDirectory.empty())
@@ -1289,25 +1053,19 @@ LibToolingFrontendResult RunLibToolingFrontend(
         "-Werror=unknown-escape-sequence",
         "-fsyntax-only",
     };
-    arguments.push_back(
-        "-I" + llvm::StringRef(workingDirectory).str());
-    arguments.insert(
-        arguments.end(),
-        options.compilerArguments.begin(),
-        options.compilerArguments.end());
+    arguments.push_back("-I" + llvm::StringRef(workingDirectory).str());
+    arguments.insert(arguments.end(), options.compilerArguments.begin(), options.compilerArguments.end());
 
-    FrontendState state(canonicalInputPath, source, options);
-    CapturingDiagnosticConsumer diagnostics(canonicalInputPath, source);
-    clang::tooling::FixedCompilationDatabase compilationDatabase(
-        llvm::StringRef(workingDirectory), arguments);
-    clang::tooling::ClangTool tool(
-        compilationDatabase, {canonicalInputPath});
+    FrontendState                            state(canonicalInputPath, source, options);
+    CapturingDiagnosticConsumer              diagnostics(canonicalInputPath, source);
+    clang::tooling::FixedCompilationDatabase compilationDatabase(llvm::StringRef(workingDirectory), arguments);
+    clang::tooling::ClangTool                tool(compilationDatabase, { canonicalInputPath });
     tool.mapVirtualFile(canonicalInputPath, source);
     tool.setDiagnosticConsumer(&diagnostics);
 
     SemanticFrontendActionFactory factory(state);
-    const int toolResult = tool.run(&factory);
-    result.diagnostics = diagnostics.str();
+    const int                     toolResult = tool.run(&factory);
+    result.diagnostics                       = diagnostics.str();
 
     if (diagnostics.hasErrors())
     {
@@ -1321,13 +1079,12 @@ LibToolingFrontendResult RunLibToolingFrontend(
     }
     if (toolResult != 0 || !state.completed)
     {
-        result.diagnostics +=
-            "LibTooling could not complete the semantic frontend action.\n";
+        result.diagnostics += "LibTooling could not complete the semantic frontend action.\n";
         return result;
     }
 
     result.transformedSource = std::move(state.transformedSource);
-    result.status = LibToolingFrontendStatus::Success;
+    result.status            = LibToolingFrontendStatus::Success;
     return result;
 }
 
@@ -1338,14 +1095,10 @@ bool HasLibToolingFrontend()
     return false;
 }
 
-LibToolingFrontendResult RunLibToolingFrontend(
-    const std::string&,
-    const std::string&,
-    const LibToolingFrontendOptions&)
+LibToolingFrontendResult RunLibToolingFrontend(const std::string&, const std::string&, const LibToolingFrontendOptions&)
 {
     LibToolingFrontendResult result;
-    result.diagnostics =
-        "This OpenSLex build does not contain the LibTooling frontend.";
+    result.diagnostics = "This OpenSLex build does not contain the LibTooling frontend.";
     return result;
 }
 

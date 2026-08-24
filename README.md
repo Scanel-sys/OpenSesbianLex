@@ -15,6 +15,7 @@ for builds without the Clang development libraries and for historical C input.
 - Flex 2.6 or newer
 - Clang, LLVM development files, and the Clang C++/LibTooling development
   package (recommended and required by `-DOPEN_SLEX_FRONTEND=LIBTOOLING`)
+- clang-format 22.1.8 (only for the source-formatting targets)
 - Ninja is recommended, but another CMake generator can be used
 
 ### Windows: choose one toolchain
@@ -118,6 +119,27 @@ their results:
 ```sh
 ctest --test-dir build --output-on-failure
 ```
+
+## Source formatting
+
+The repository's `.clang-format` file is applied to C and C++ files under
+`src`, `tests`, and `fuzz`. Flex and Bison inputs are intentionally excluded
+because clang-format does not understand their complete grammar.
+
+After configuring a build directory, check formatting without changing files:
+
+```sh
+cmake --build build --target format-check
+```
+
+Apply the formatting locally with:
+
+```sh
+cmake --build build --target format
+```
+
+The same check runs as a separate GitHub Actions job with clang-format 22.1.8,
+before the build and test jobs.
 
 The Linux GitHub Actions jobs run the OpenCL tests on two independent
 implementations: the PoCL CPU runtime and the Oclgrind OpenCL simulator. The

@@ -4,8 +4,8 @@
 #include "LibToolingFrontend.hpp"
 
 #include <algorithm>
-#include <cerrno>
 #include <cctype>
+#include <cerrno>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -27,49 +27,46 @@ extern int yylineno;
 // obfuscation state introduced on dev-obfuscator while the file handling and
 // diagnostics below use the safer C++ implementation from main.
 int if_processing = 0;
-int if_id = 0;
-int if_type = 0;
+int if_id         = 0;
+int if_type       = 0;
 
 namespace
 {
-enum class ExitCode
-{
-    Success = 0,
-    SyntaxError = 1,
-    UsageError = 2,
-    InputError = 3,
+enum class ExitCode {
+    Success       = 0,
+    SyntaxError   = 1,
+    UsageError    = 2,
+    InputError    = 3,
     FrontendError = 4,
 };
 
-enum class FrontendMode
-{
+enum class FrontendMode {
     Auto,
     LibTooling,
     Legacy,
 };
 
-enum class ReadLineResult
-{
+enum class ReadLineResult {
     Line,
     EndOfFile,
     Error,
 };
 
-std::ifstream inputFile;
+std::ifstream      inputFile;
 std::istringstream transformedInput;
-std::istream* activeInput = &inputFile;
-std::string lineBuffer;
+std::istream*      activeInput = &inputFile;
+std::string        lineBuffer;
 
-bool endOfFile = false;
-bool inputReadError = false;
-bool syntaxError = false;
-bool suppressDiagnostics = false;
+bool endOfFile                 = false;
+bool inputReadError            = false;
+bool syntaxError               = false;
+bool suppressDiagnostics       = false;
 bool legacyOpaquePredicatePass = true;
 
-int currentRow = 0;
-std::size_t bufferOffset = 0;
-std::size_t tokenStart = 0;
-std::size_t tokenLength = 0;
+int         currentRow     = 0;
+std::size_t bufferOffset   = 0;
+std::size_t tokenStart     = 0;
+std::size_t tokenLength    = 0;
 std::size_t nextTokenStart = 0;
 
 ReadLineResult getNextLine();
@@ -77,17 +74,14 @@ ReadLineResult getNextLine();
 struct ObfuscationToken
 {
     std::string text;
-    bool isIdentifier = false;
-    std::size_t sourceIndex = std::numeric_limits<std::size_t>::max();
+    bool        isIdentifier = false;
+    std::size_t sourceIndex  = std::numeric_limits<std::size_t>::max();
 };
 
 class BracesQueue
 {
 public:
-    void push()
-    {
-        ++braces_;
-    }
+    void push() { ++braces_; }
 
     int pop()
     {
@@ -111,23 +105,16 @@ private:
 class Obfuscator
 {
 public:
-    void setSeed(std::uint32_t seed)
-    {
-        seed_ = seed == 0 ? 0x6d2b79f5u : seed;
-    }
+    void setSeed(std::uint32_t seed) { seed_ = seed == 0 ? 0x6d2b79f5u : seed; }
 
-    void setIdentifiersAlreadyResolved(bool value)
-    {
-        identifiersAlreadyResolved_ = value;
-    }
+    void setIdentifiersAlreadyResolved(bool value) { identifiersAlreadyResolved_ = value; }
 
     void processToken(const char* token, bool isIdentifier)
     {
         const std::string tokenText(token);
         const std::size_t sourceIndex = sourceTokens_.size();
-        sourceTokens_.push_back({tokenText, isIdentifier});
-        const ObfuscationToken obfuscationToken{
-            tokenText, isIdentifier, sourceIndex};
+        sourceTokens_.push_back({ tokenText, isIdentifier });
+        const ObfuscationToken obfuscationToken{ tokenText, isIdentifier, sourceIndex };
 
         if (if_processing != 0)
         {
@@ -150,9 +137,7 @@ public:
 
         if (!tempTokens_.empty() && if_processing == 0)
         {
-            appendTokens(
-                bodyTokens_, tempTokens_, ifBodyStart_,
-                tempTokens_.size() - ifBodyStart_ - 1);
+            appendTokens(bodyTokens_, tempTokens_, ifBodyStart_, tempTokens_.size() - ifBodyStart_ - 1);
 
             appendTokens(outputTokens_, tempTokens_, 0, ifBodyStart_);
             insertOpaqueFalseBranch();
@@ -180,8 +165,7 @@ public:
         const ObfuscationToken* previous = nullptr;
         for (const ObfuscationToken& token : outputTokens_)
         {
-            if (previous != nullptr && needsIdentifierSeparator(
-                    *previous, token))
+            if (previous != nullptr && needsIdentifierSeparator(*previous, token))
             {
                 output << ' ';
             }
@@ -192,16 +176,16 @@ public:
     }
 
 private:
-    std::vector<ObfuscationToken> tempTokens_;
-    std::vector<ObfuscationToken> bodyTokens_;
-    std::vector<ObfuscationToken> outputTokens_;
+    std::vector<ObfuscationToken>      tempTokens_;
+    std::vector<ObfuscationToken>      bodyTokens_;
+    std::vector<ObfuscationToken>      outputTokens_;
     std::vector<IdentifierSourceToken> sourceTokens_;
-    BracesQueue braces_;
+    BracesQueue                        braces_;
 
-    std::size_t ifBodyStart_ = 0;
-    std::uint32_t opaquePredicateIndex_ = 0;
-    std::uint32_t seed_ = 0x9e3779b9u;
-    bool identifiersAlreadyResolved_ = false;
+    std::size_t   ifBodyStart_                = 0;
+    std::uint32_t opaquePredicateIndex_       = 0;
+    std::uint32_t seed_                       = 0x9e3779b9u;
+    bool          identifiersAlreadyResolved_ = false;
 
     static bool isIdentifierCharacter(char character)
     {
@@ -209,24 +193,16 @@ private:
         return std::isalnum(value) != 0 || character == '_';
     }
 
-    static bool needsIdentifierSeparator(
-        const ObfuscationToken& previous,
-        const ObfuscationToken& current)
+    static bool needsIdentifierSeparator(const ObfuscationToken& previous, const ObfuscationToken& current)
     {
-        if (previous.text.empty() || current.text.empty() ||
-            (!previous.isIdentifier && !current.isIdentifier))
+        if (previous.text.empty() || current.text.empty() || (!previous.isIdentifier && !current.isIdentifier))
         {
             return false;
         }
-        return isIdentifierCharacter(previous.text.back()) &&
-            isIdentifierCharacter(current.text.front());
+        return isIdentifierCharacter(previous.text.back()) && isIdentifierCharacter(current.text.front());
     }
 
-    static void appendTokens(
-        std::vector<ObfuscationToken>& destination,
-        const std::vector<ObfuscationToken>& source,
-        std::size_t start,
-        std::size_t count)
+    static void appendTokens(std::vector<ObfuscationToken>& destination, const std::vector<ObfuscationToken>& source, std::size_t start, std::size_t count)
     {
         for (std::size_t index = start; index < start + count; ++index)
         {
@@ -234,11 +210,7 @@ private:
         }
     }
 
-    void pushOutputToken(const std::string& text)
-    {
-        outputTokens_.push_back(
-            {text, false, std::numeric_limits<std::size_t>::max()});
-    }
+    void pushOutputToken(const std::string& text) { outputTokens_.push_back({ text, false, std::numeric_limits<std::size_t>::max() }); }
 
     static std::string unsignedLiteral(std::uint32_t value)
     {
@@ -252,9 +224,8 @@ private:
         // n * (n + 1) is even for every unsigned n, including after modular
         // overflow. The predicate is therefore always false and does not read
         // or evaluate anything from the user's original condition.
-        const std::uint32_t seed =
-            seed_ ^ (opaquePredicateIndex_ * 0x85ebca6bu);
-        const std::uint32_t payloadLeft = seed ^ 0xa5a5a5a5u;
+        const std::uint32_t seed         = seed_ ^ (opaquePredicateIndex_ * 0x85ebca6bu);
+        const std::uint32_t payloadLeft  = seed ^ 0xa5a5a5a5u;
         const std::uint32_t payloadRight = seed ^ 0x5a5a5a5au;
         ++opaquePredicateIndex_;
 
@@ -292,8 +263,7 @@ private:
 
     void obfuscateIdentifiers()
     {
-        const std::vector<std::string> replacements =
-            ResolveIdentifierNames(sourceTokens_, seed_);
+        const std::vector<std::string> replacements = ResolveIdentifierNames(sourceTokens_, seed_);
 
         for (ObfuscationToken& token : outputTokens_)
         {
@@ -315,39 +285,57 @@ private:
             std::string& token = outputTokens_[index].text;
             if (token == "[")
             {
-                token = index % 2 == 0 ? "<:" : "?" "?(";
+                token = index % 2 == 0 ? "<:"
+                                       : "?"
+                                         "?(";
             }
             else if (token == "]")
             {
-                token = index % 2 == 0 ? ":>" : "?" "?)";
+                token = index % 2 == 0 ? ":>"
+                                       : "?"
+                                         "?)";
             }
             else if (token == "{")
             {
-                token = index % 2 == 0 ? "<%" : "?" "?<";
+                token = index % 2 == 0 ? "<%"
+                                       : "?"
+                                         "?<";
             }
             else if (token == "}")
             {
-                token = index % 2 == 0 ? "%>" : "?" "?>";
+                token = index % 2 == 0 ? "%>"
+                                       : "?"
+                                         "?>";
             }
             else if (token == "#")
             {
-                token = index % 2 == 0 ? "%:" : "?" "?=";
+                token = index % 2 == 0 ? "%:"
+                                       : "?"
+                                         "?=";
             }
             else if (token == "\\")
             {
-                token = "?" "?/";
+                token =
+                    "?"
+                    "?/";
             }
             else if (token == "^")
             {
-                token = "?" "?'";
+                token =
+                    "?"
+                    "?'";
             }
             else if (token == "|")
             {
-                token = "?" "?!";
+                token =
+                    "?"
+                    "?!";
             }
             else if (token == "~")
             {
-                token = "?" "?-";
+                token =
+                    "?"
+                    "?-";
             }
         }
     }
@@ -364,7 +352,7 @@ char dumpChar(char character)
 std::string dumpString(const char* text)
 {
     constexpr std::size_t maxLength = 100;
-    const std::size_t length = std::min(std::strlen(text), maxLength);
+    const std::size_t     length    = std::min(std::strlen(text), maxLength);
 
     std::string result;
     result.reserve(length);
@@ -378,16 +366,15 @@ std::string dumpString(const char* text)
 int toLocationValue(std::size_t value)
 {
     const auto maxValue = static_cast<std::size_t>(std::numeric_limits<int>::max());
-    return value > maxValue ? std::numeric_limits<int>::max()
-                            : static_cast<int>(value);
+    return value > maxValue ? std::numeric_limits<int>::max() : static_cast<int>(value);
 }
 
 ReadLineResult getNextLine()
 {
-    bufferOffset = 0;
-    tokenStart = 0;
+    bufferOffset   = 0;
+    tokenStart     = 0;
     nextTokenStart = 1;
-    endOfFile = false;
+    endOfFile      = false;
     lineBuffer.clear();
 
     if (std::getline(*activeInput, lineBuffer))
@@ -418,11 +405,10 @@ bool parseSeed(const char* text, std::uint32_t& seed)
         return false;
     }
 
-    errno = 0;
-    char* end = nullptr;
+    errno                           = 0;
+    char*                    end    = nullptr;
     const unsigned long long parsed = std::strtoull(text, &end, 0);
-    if (errno != 0 || end == text || *end != '\0' ||
-        parsed > std::numeric_limits<std::uint32_t>::max())
+    if (errno != 0 || end == text || *end != '\0' || parsed > std::numeric_limits<std::uint32_t>::max())
     {
         return false;
     }
@@ -441,8 +427,7 @@ bool parseFrontendMode(const char* text, FrontendMode& mode)
         mode = FrontendMode::Auto;
         return true;
     }
-    if (std::strcmp(text, "libtooling") == 0 ||
-        std::strcmp(text, "clang") == 0)
+    if (std::strcmp(text, "libtooling") == 0 || std::strcmp(text, "clang") == 0)
     {
         mode = FrontendMode::LibTooling;
         return true;
@@ -462,19 +447,11 @@ bool hasOpenCLFileExtension(const std::string& path)
         return false;
     }
     std::string extension = path.substr(path.size() - 3);
-    std::transform(
-        extension.begin(), extension.end(), extension.begin(),
-        [](char character) {
-            return static_cast<char>(std::tolower(
-                static_cast<unsigned char>(character)));
-        });
+    std::transform(extension.begin(), extension.end(), extension.begin(), [](char character) { return static_cast<char>(std::tolower(static_cast<unsigned char>(character))); });
     return extension == ".cl";
 }
 
-bool readSourceFile(
-    const char* path,
-    std::string& source,
-    std::string& error)
+bool readSourceFile(const char* path, std::string& source, std::string& error)
 {
     std::ifstream file(path, std::ios::binary);
     if (!file.is_open())
@@ -502,7 +479,7 @@ void printUsage(const char* programName)
                  " [--clang-arg <argument>]..."
                  " <input-file> [output-file]\n";
 }
-} // namespace
+}  // namespace
 
 bool UseLegacyOpaquePredicatePass()
 {
@@ -589,8 +566,7 @@ void PrintError(const char* message)
         std::cerr << std::string(markerLength, '^') << '\n';
     }
 
-    std::cerr << "Error: " << (message != nullptr ? message : "syntax error")
-              << " at line " << yylineno << "\n\n";
+    std::cerr << "Error: " << (message != nullptr ? message : "syntax error") << " at line " << yylineno << "\n\n";
 }
 
 void DumpRow()
@@ -619,25 +595,22 @@ void BeginToken(const char* token)
     }
 
     const bool isIdentifier = if_id != 0;
-    if_id = 0;
+    if_id                   = 0;
 
     obfuscator.processToken(token, isIdentifier);
 
-    tokenStart = nextTokenStart;
-    tokenLength = std::strlen(token);
+    tokenStart     = nextTokenStart;
+    tokenLength    = std::strlen(token);
     nextTokenStart = bufferOffset;
 
-    yylloc.first_line = currentRow;
+    yylloc.first_line   = currentRow;
     yylloc.first_column = toLocationValue(tokenStart);
-    yylloc.last_line = currentRow;
-    yylloc.last_column = toLocationValue(
-        tokenStart + (tokenLength == 0 ? 0 : tokenLength - 1));
+    yylloc.last_line    = currentRow;
+    yylloc.last_column  = toLocationValue(tokenStart + (tokenLength == 0 ? 0 : tokenLength - 1));
 
     if (debug != 0)
     {
-        std::cout << "Token '" << dumpString(token) << "' at "
-                  << yylloc.first_column << ':' << yylloc.last_column
-                  << " next at " << nextTokenStart << '\n';
+        std::cout << "Token '" << dumpString(token) << "' at " << yylloc.first_column << ':' << yylloc.last_column << " next at " << nextTokenStart << '\n';
     }
 }
 
@@ -660,11 +633,8 @@ int GetNextChar(char* destination, int maxBuffer)
 
     if (debug != 0)
     {
-        const auto byteValue = static_cast<unsigned int>(
-            static_cast<unsigned char>(destination[0]));
-        std::cout << "GetNextChar() => '" << dumpChar(destination[0])
-                  << "' 0x" << std::hex << byteValue << std::dec
-                  << " at " << bufferOffset << '\n';
+        const auto byteValue = static_cast<unsigned int>(static_cast<unsigned char>(destination[0]));
+        std::cout << "GetNextChar() => '" << dumpChar(destination[0]) << "' 0x" << std::hex << byteValue << std::dec << " at " << bufferOffset << '\n';
     }
 
     return destination[0] == '\0' ? 0 : 1;
@@ -682,42 +652,38 @@ void ResetOpenSLexFrontendForFuzzing()
     transformedInput.str("");
     activeInput = &inputFile;
     lineBuffer.clear();
-    endOfFile = false;
-    inputReadError = false;
-    syntaxError = false;
-    suppressDiagnostics = true;
+    endOfFile                 = false;
+    inputReadError            = false;
+    syntaxError               = false;
+    suppressDiagnostics       = true;
     legacyOpaquePredicatePass = true;
-    currentRow = 1;
-    bufferOffset = 0;
-    tokenStart = 0;
-    tokenLength = 0;
-    nextTokenStart = 0;
-    if_processing = 0;
-    if_id = 0;
-    if_type = 0;
-    yylineno = 1;
-    obfuscator = Obfuscator{};
+    currentRow                = 1;
+    bufferOffset              = 0;
+    tokenStart                = 0;
+    tokenLength               = 0;
+    nextTokenStart            = 0;
+    if_processing             = 0;
+    if_id                     = 0;
+    if_type                   = 0;
+    yylineno                  = 1;
+    obfuscator                = Obfuscator{};
 }
 #else
 int main(int argc, char* argv[])
 {
-    const char* programName = argc > 0 && argv[0] != nullptr
-                                  ? argv[0]
-                                  : "OpenSLex";
-    int argumentIndex = 1;
-    std::uint32_t seed = 0x9e3779b9u;
-    FrontendMode frontendMode = FrontendMode::Auto;
+    const char*              programName   = argc > 0 && argv[0] != nullptr ? argv[0] : "OpenSLex";
+    int                      argumentIndex = 1;
+    std::uint32_t            seed          = 0x9e3779b9u;
+    FrontendMode             frontendMode  = FrontendMode::Auto;
     std::vector<std::string> clangArguments;
 
     while (argumentIndex < argc)
     {
         if (std::strcmp(argv[argumentIndex], "--seed") == 0)
         {
-            if (argumentIndex + 1 >= argc ||
-                !parseSeed(argv[argumentIndex + 1], seed))
+            if (argumentIndex + 1 >= argc || !parseSeed(argv[argumentIndex + 1], seed))
             {
-                std::cerr
-                    << "Error: --seed requires an unsigned 32-bit value.\n";
+                std::cerr << "Error: --seed requires an unsigned 32-bit value.\n";
                 printUsage(programName);
                 return static_cast<int>(ExitCode::UsageError);
             }
@@ -726,12 +692,10 @@ int main(int argc, char* argv[])
         }
         if (std::strcmp(argv[argumentIndex], "--frontend") == 0)
         {
-            if (argumentIndex + 1 >= argc ||
-                !parseFrontendMode(argv[argumentIndex + 1], frontendMode))
+            if (argumentIndex + 1 >= argc || !parseFrontendMode(argv[argumentIndex + 1], frontendMode))
             {
-                std::cerr
-                    << "Error: --frontend requires auto, libtooling, "
-                       "clang, or legacy.\n";
+                std::cerr << "Error: --frontend requires auto, libtooling, "
+                             "clang, or legacy.\n";
                 printUsage(programName);
                 return static_cast<int>(ExitCode::UsageError);
             }
@@ -751,13 +715,9 @@ int main(int argc, char* argv[])
             continue;
         }
         const char clangArgumentPrefix[] = "--clang-arg=";
-        if (std::strncmp(
-                argv[argumentIndex],
-                clangArgumentPrefix,
-                sizeof(clangArgumentPrefix) - 1) == 0)
+        if (std::strncmp(argv[argumentIndex], clangArgumentPrefix, sizeof(clangArgumentPrefix) - 1) == 0)
         {
-            clangArguments.push_back(
-                argv[argumentIndex] + sizeof(clangArgumentPrefix) - 1);
+            clangArguments.push_back(argv[argumentIndex] + sizeof(clangArgumentPrefix) - 1);
             ++argumentIndex;
             continue;
         }
@@ -771,25 +731,18 @@ int main(int argc, char* argv[])
         return static_cast<int>(ExitCode::UsageError);
     }
 
-    const char* inputPath = argv[argumentIndex];
-    const char* outputPath = positionalCount == 2
-        ? argv[argumentIndex + 1]
-        : "obfuscated_result.cl";
+    const char* inputPath  = argv[argumentIndex];
+    const char* outputPath = positionalCount == 2 ? argv[argumentIndex + 1] : "obfuscated_result.cl";
     obfuscator.setSeed(seed);
 
     const bool useLibToolingFrontend =
-        frontendMode == FrontendMode::LibTooling ||
-        (frontendMode == FrontendMode::Auto &&
-         HasLibToolingFrontend() &&
-         hasOpenCLFileExtension(inputPath));
+        frontendMode == FrontendMode::LibTooling || (frontendMode == FrontendMode::Auto && HasLibToolingFrontend() && hasOpenCLFileExtension(inputPath));
 
-    if (frontendMode == FrontendMode::LibTooling &&
-        !HasLibToolingFrontend())
+    if (frontendMode == FrontendMode::LibTooling && !HasLibToolingFrontend())
     {
-        std::cerr
-            << "Error: this OpenSLex build does not contain the LibTooling "
-               "semantic frontend. Reconfigure with "
-               "-DOPEN_SLEX_FRONTEND=LIBTOOLING.\n";
+        std::cerr << "Error: this OpenSLex build does not contain the LibTooling "
+                     "semantic frontend. Reconfigure with "
+                     "-DOPEN_SLEX_FRONTEND=LIBTOOLING.\n";
         return static_cast<int>(ExitCode::FrontendError);
     }
 
@@ -799,16 +752,14 @@ int main(int argc, char* argv[])
         std::string inputError;
         if (!readSourceFile(inputPath, source, inputError))
         {
-            std::cerr << "Error: " << inputError << " '" << inputPath
-                      << "'.\n";
+            std::cerr << "Error: " << inputError << " '" << inputPath << "'.\n";
             return static_cast<int>(ExitCode::InputError);
         }
 
         LibToolingFrontendOptions options;
-        options.seed = seed;
-        options.compilerArguments = clangArguments;
-        const LibToolingFrontendResult frontend = RunLibToolingFrontend(
-            inputPath, source, options);
+        options.seed                            = seed;
+        options.compilerArguments               = clangArguments;
+        const LibToolingFrontendResult frontend = RunLibToolingFrontend(inputPath, source, options);
         if (!frontend.diagnostics.empty())
         {
             std::cerr << frontend.diagnostics;
@@ -819,15 +770,12 @@ int main(int argc, char* argv[])
         }
         if (frontend.status != LibToolingFrontendStatus::Success)
         {
-            return static_cast<int>(
-                frontend.status == LibToolingFrontendStatus::SyntaxError
-                    ? ExitCode::SyntaxError
-                    : ExitCode::FrontendError);
+            return static_cast<int>(frontend.status == LibToolingFrontendStatus::SyntaxError ? ExitCode::SyntaxError : ExitCode::FrontendError);
         }
 
         transformedInput.str(frontend.transformedSource);
         transformedInput.clear();
-        activeInput = &transformedInput;
+        activeInput               = &transformedInput;
         legacyOpaquePredicatePass = false;
         obfuscator.setIdentifiersAlreadyResolved(true);
     }
@@ -836,8 +784,7 @@ int main(int argc, char* argv[])
         inputFile.open(inputPath);
         if (!inputFile.is_open())
         {
-            std::cerr << "Error: cannot open input file '" << inputPath
-                      << "'.\n";
+            std::cerr << "Error: cannot open input file '" << inputPath << "'.\n";
             return static_cast<int>(ExitCode::InputError);
         }
         activeInput = &inputFile;
@@ -877,16 +824,14 @@ int main(int argc, char* argv[])
     std::ostringstream outputBuffer;
     if (!obfuscator.writeResult(outputBuffer))
     {
-        std::cerr << "Error: failed to prepare output file '" << outputPath
-                  << "'.\n";
+        std::cerr << "Error: failed to prepare output file '" << outputPath << "'.\n";
         return static_cast<int>(ExitCode::InputError);
     }
 
     std::string outputError;
     if (!WriteFileAtomically(outputPath, outputBuffer.str(), outputError))
     {
-        std::cerr << "Error: failed to write output file '" << outputPath
-                  << "': " << outputError << ".\n";
+        std::cerr << "Error: failed to write output file '" << outputPath << "': " << outputError << ".\n";
         return static_cast<int>(ExitCode::InputError);
     }
 

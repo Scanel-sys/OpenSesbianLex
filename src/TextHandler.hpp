@@ -11,14 +11,14 @@ typedef struct YYLTYPE
 
 #include "SLexParser.tab.hpp"
 
-int yyparse();
-int yylex();
+int  yyparse();
+int  yylex();
 void yyerror(const char* message);
 
 void DumpRow();
-int GetNextChar(char* destination, int maxBuffer);
+int  GetNextChar(char* destination, int maxBuffer);
 void BeginToken(const char* token);
-int ClassifyPreprocessorDirective(const char* directive);
+int  ClassifyPreprocessorDirective(const char* directive);
 void PrintError(const char* message);
 bool UseLegacyOpaquePredicatePass();
 void ResetOpenSLexFrontendForFuzzing();

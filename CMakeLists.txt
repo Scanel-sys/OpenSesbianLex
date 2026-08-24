@@ -5,6 +5,25 @@ project(OpenSesbianLex VERSION 1.0.0 LANGUAGES CXX)
 include(CTest)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
+add_custom_target(
+    format
+    COMMAND
+        "${CMAKE_COMMAND}"
+        -DOPEN_SLEX_CLANG_FORMAT_MODE=fix
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunClangFormat.cmake"
+    COMMENT "Formatting OpenSesbianLex C and C++ sources"
+    VERBATIM
+)
+add_custom_target(
+    format-check
+    COMMAND
+        "${CMAKE_COMMAND}"
+        -DOPEN_SLEX_CLANG_FORMAT_MODE=check
+        -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunClangFormat.cmake"
+    COMMENT "Checking OpenSesbianLex C and C++ source formatting"
+    VERBATIM
+)
+
 option(
     OPEN_SLEX_ENABLE_OPENCL_RUNTIME_TESTS
     "Build tests that execute original and obfuscated kernels via OpenCL"

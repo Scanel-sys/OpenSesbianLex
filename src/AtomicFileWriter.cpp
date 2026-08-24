@@ -32,68 +32,49 @@ unsigned long currentProcessId()
 #endif
 }
 
-std::string makeTempFilePath(
-    const std::string& outputPath,
-    unsigned int attempt)
+std::string makeTempFilePath(const std::string& outputPath, unsigned int attempt)
 {
-    return outputPath + ".openslex.tmp." +
-        std::to_string(currentProcessId()) + "." + std::to_string(attempt);
+    return outputPath + ".openslex.tmp." + std::to_string(currentProcessId()) + "." + std::to_string(attempt);
 }
 
 #ifdef _WIN32
 std::string windowsErrorMessage(const char* operation, DWORD errorCode)
 {
-    return std::string(operation) + " failed with Windows error " +
-        std::to_string(static_cast<unsigned long>(errorCode));
+    return std::string(operation) + " failed with Windows error " + std::to_string(static_cast<unsigned long>(errorCode));
 }
 #endif
-}
+}  // namespace
 
-bool WriteFileAtomically(
-    const std::string& outputPath,
-    const std::string& contents,
-    std::string& errorMessage)
+bool WriteFileAtomically(const std::string& outputPath, const std::string& contents, std::string& errorMessage)
 {
     for (unsigned int attempt = 0; attempt < maxTempFileAttempts; ++attempt)
     {
         const std::string tempPath = makeTempFilePath(outputPath, attempt);
 
 #ifdef _WIN32
-        HANDLE tempFile = CreateFileA(
-            tempPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW,
-            FILE_ATTRIBUTE_NORMAL, nullptr);
+        HANDLE tempFile = CreateFileA(tempPath.c_str(), GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
         if (tempFile == INVALID_HANDLE_VALUE)
         {
             const DWORD errorCode = GetLastError();
-            if (errorCode == ERROR_FILE_EXISTS ||
-                errorCode == ERROR_ALREADY_EXISTS)
+            if (errorCode == ERROR_FILE_EXISTS || errorCode == ERROR_ALREADY_EXISTS)
             {
                 continue;
             }
 
-            errorMessage = windowsErrorMessage(
-                "creating temporary output file", errorCode);
+            errorMessage = windowsErrorMessage("creating temporary output file", errorCode);
             return false;
         }
 
-        bool writeSucceeded = true;
-        std::size_t writtenTotal = 0;
+        bool        writeSucceeded = true;
+        std::size_t writtenTotal   = 0;
         while (writtenTotal < contents.size())
         {
             const std::size_t remaining = contents.size() - writtenTotal;
-            const DWORD chunkSize = remaining >
-                    static_cast<std::size_t>(
-                        std::numeric_limits<DWORD>::max())
-                ? std::numeric_limits<DWORD>::max()
-                : static_cast<DWORD>(remaining);
-            DWORD writtenNow = 0;
-            if (WriteFile(
-                    tempFile, contents.data() + writtenTotal, chunkSize,
-                    &writtenNow, nullptr) == 0 ||
-                writtenNow == 0)
+            const DWORD chunkSize  = remaining > static_cast<std::size_t>(std::numeric_limits<DWORD>::max()) ? std::numeric_limits<DWORD>::max() : static_cast<DWORD>(remaining);
+            DWORD       writtenNow = 0;
+            if (WriteFile(tempFile, contents.data() + writtenTotal, chunkSize, &writtenNow, nullptr) == 0 || writtenNow == 0)
             {
-                errorMessage = windowsErrorMessage(
-                    "writing temporary output file", GetLastError());
+                errorMessage   = windowsErrorMessage("writing temporary output file", GetLastError());
                 writeSucceeded = false;
                 break;
             }
@@ -102,15 +83,13 @@ bool WriteFileAtomically(
 
         if (writeSucceeded && FlushFileBuffers(tempFile) == 0)
         {
-            errorMessage = windowsErrorMessage(
-                "flushing temporary output file", GetLastError());
+            errorMessage   = windowsErrorMessage("flushing temporary output file", GetLastError());
             writeSucceeded = false;
         }
 
         if (CloseHandle(tempFile) == 0 && writeSucceeded)
         {
-            errorMessage = windowsErrorMessage(
-                "closing temporary output file", GetLastError());
+            errorMessage   = windowsErrorMessage("closing temporary output file", GetLastError());
             writeSucceeded = false;
         }
 
@@ -120,18 +99,14 @@ bool WriteFileAtomically(
             return false;
         }
 
-        if (MoveFileExA(
-                tempPath.c_str(), outputPath.c_str(),
-                MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0)
+        if (MoveFileExA(tempPath.c_str(), outputPath.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH) == 0)
         {
-            errorMessage = windowsErrorMessage(
-                "replacing output file", GetLastError());
+            errorMessage = windowsErrorMessage("replacing output file", GetLastError());
             DeleteFileA(tempPath.c_str());
             return false;
         }
 #else
-        const int tempFile = open(
-            tempPath.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0666);
+        const int tempFile = open(tempPath.c_str(), O_WRONLY | O_CREAT | O_EXCL, 0666);
         if (tempFile == -1)
         {
             if (errno == EEXIST)
@@ -139,27 +114,22 @@ bool WriteFileAtomically(
                 continue;
             }
 
-            errorMessage = std::string("creating temporary output file failed: ") +
-                std::strerror(errno);
+            errorMessage = std::string("creating temporary output file failed: ") + std::strerror(errno);
             return false;
         }
 
-        bool writeSucceeded = true;
-        std::size_t writtenTotal = 0;
+        bool        writeSucceeded = true;
+        std::size_t writtenTotal   = 0;
         while (writtenTotal < contents.size())
         {
-            const ssize_t writtenNow = write(
-                tempFile, contents.data() + writtenTotal,
-                contents.size() - writtenTotal);
+            const ssize_t writtenNow = write(tempFile, contents.data() + writtenTotal, contents.size() - writtenTotal);
             if (writtenNow == -1 && errno == EINTR)
             {
                 continue;
             }
             if (writtenNow <= 0)
             {
-                errorMessage = std::string(
-                    "writing temporary output file failed: ") +
-                    std::strerror(errno);
+                errorMessage   = std::string("writing temporary output file failed: ") + std::strerror(errno);
                 writeSucceeded = false;
                 break;
             }
@@ -172,17 +142,13 @@ bool WriteFileAtomically(
             {
                 continue;
             }
-            errorMessage = std::string(
-                "flushing temporary output file failed: ") +
-                std::strerror(errno);
+            errorMessage   = std::string("flushing temporary output file failed: ") + std::strerror(errno);
             writeSucceeded = false;
         }
 
         if (close(tempFile) == -1 && writeSucceeded)
         {
-            errorMessage = std::string(
-                "closing temporary output file failed: ") +
-                std::strerror(errno);
+            errorMessage   = std::string("closing temporary output file failed: ") + std::strerror(errno);
             writeSucceeded = false;
         }
 
@@ -194,8 +160,7 @@ bool WriteFileAtomically(
 
         if (std::rename(tempPath.c_str(), outputPath.c_str()) == -1)
         {
-            errorMessage = std::string("replacing output file failed: ") +
-                std::strerror(errno);
+            errorMessage = std::string("replacing output file failed: ") + std::strerror(errno);
             unlink(tempPath.c_str());
             return false;
         }
