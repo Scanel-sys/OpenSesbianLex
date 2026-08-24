@@ -137,6 +137,8 @@ add_executable(
     src/LibToolingFrontend.hpp
     src/TextHandler.cpp
     src/TextHandler.hpp
+    src/TokenEmitter.cpp
+    src/TokenEmitter.hpp
     ${BISON_OpenSLexParser_OUTPUTS}
     ${FLEX_OpenSLexLexer_OUTPUTS}
 )
@@ -202,6 +204,8 @@ if(OPEN_SLEX_BUILD_FUZZER)
         src/IdentifierResolver.hpp
         src/TextHandler.cpp
         src/TextHandler.hpp
+        src/TokenEmitter.cpp
+        src/TokenEmitter.hpp
         ${BISON_OpenSLexParser_OUTPUTS}
         ${FLEX_OpenSLexLexer_OUTPUTS}
     )
@@ -287,6 +291,7 @@ if(BUILD_TESTING)
                 "${CMAKE_COMMAND}"
                 "-DPARSER=$<TARGET_FILE:OpenSLex>"
                 "-DINPUT=${input_file}"
+                "-DOUTPUT=${CMAKE_CURRENT_BINARY_DIR}/test-inputs/parser/${test_name}.cl"
                 "-DEXPECTED_EXIT_CODE=${expected_exit_code}"
                 ${extra_test_arguments}
                 -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunParserTest.cmake"
@@ -338,6 +343,7 @@ if(BUILD_TESTING)
     add_parser_test(opencl.valid.comment_boundaries tests/opencl_comment_boundaries.cl 0)
     add_parser_test(opencl.valid.preprocessor tests/opencl_preprocessor.cl 0)
     add_parser_test(opencl.valid.language_coverage tests/opencl_language_coverage.cl 0)
+    add_parser_test(opencl.valid.token_boundaries tests/opencl_token_boundaries.cl 0)
     if(OPEN_SLEX_HAS_LIBTOOLING_FRONTEND)
         add_parser_test(
             opencl.valid.libtooling_semantics
@@ -560,6 +566,24 @@ if(BUILD_TESTING)
         PROPERTIES LABELS "opencl;obfuscation;comments" TIMEOUT 10
     )
 
+    set(OPEN_SLEX_TOKEN_BOUNDARY_OUTPUT
+        "${OPEN_SLEX_GENERATED_TEST_DIR}/token-boundaries-obfuscated.cl"
+    )
+    add_test(
+        NAME opencl.obfuscation.token_boundaries
+        COMMAND
+            "${CMAKE_COMMAND}"
+            "-DPARSER=$<TARGET_FILE:OpenSLex>"
+            "-DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_token_boundaries.cl"
+            "-DOUTPUT=${OPEN_SLEX_TOKEN_BOUNDARY_OUTPUT}"
+            "-DWORK_DIR=${OPEN_SLEX_GENERATED_TEST_DIR}/token-boundaries"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunTokenBoundaryTest.cmake"
+    )
+    set_tests_properties(
+        opencl.obfuscation.token_boundaries
+        PROPERTIES LABELS "opencl;obfuscation;tokens;semantic" TIMEOUT 20
+    )
+
     if(OPEN_SLEX_HAS_LIBTOOLING_FRONTEND)
         set(OPEN_SLEX_LIBTOOLING_SEMANTIC_OUTPUT
             "${OPEN_SLEX_GENERATED_TEST_DIR}/libtooling-semantics-obfuscated.cl"
@@ -645,6 +669,7 @@ if(BUILD_TESTING)
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_opaque_predicate.cl"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_preprocessor.cl"
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_symbol_scopes.cl"
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/opencl_token_boundaries.cl"
         )
         foreach(opencl_example IN LISTS OPEN_SLEX_OPENCL_EXAMPLES)
             get_filename_component(opencl_example_name "${opencl_example}" NAME)
@@ -762,6 +787,7 @@ if(BUILD_TESTING)
         opencl.valid.comment_boundaries
         opencl.valid.preprocessor
         opencl.valid.language_coverage
+        opencl.valid.token_boundaries
         opencl.valid.line_comment_at_eof
         PROPERTIES LABELS "opencl;valid"
     )

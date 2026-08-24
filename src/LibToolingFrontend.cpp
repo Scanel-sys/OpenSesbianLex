@@ -821,6 +821,13 @@ public:
             return;
         }
 
+        if (!state_.options.applyTransformations)
+        {
+            state_.transformedSource = state_.source;
+            state_.completed         = true;
+            return;
+        }
+
         SymbolCollector collector(context, state_);
         collector.TraverseDecl(context.getTranslationUnitDecl());
         SymbolMap symbols = collector.takeSymbols();
@@ -1050,6 +1057,7 @@ LibToolingFrontendResult RunLibToolingFrontend(const std::string& inputPath, con
         "-resource-dir=" OPEN_SLEX_CLANG_RESOURCE_DIR,
         "-Xclang",
         "-finclude-default-header",
+        "-Wno-trigraphs",
         "-Werror=unknown-escape-sequence",
         "-fsyntax-only",
     };
@@ -1103,3 +1111,12 @@ LibToolingFrontendResult RunLibToolingFrontend(const std::string&, const std::st
 }
 
 #endif
+
+LibToolingFrontendResult ValidateOpenCLSource(const std::string& inputPath, const std::string& source, const std::vector<std::string>& compilerArguments)
+{
+    LibToolingFrontendOptions options;
+    options.compilerArguments      = compilerArguments;
+    options.insertOpaquePredicates = false;
+    options.applyTransformations   = false;
+    return RunLibToolingFrontend(inputPath, source, options);
+}

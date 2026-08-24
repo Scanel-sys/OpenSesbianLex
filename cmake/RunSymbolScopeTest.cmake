@@ -68,13 +68,13 @@ if(NOT vector_selector_count EQUAL 1)
 endif()
 
 string(REGEX MATCH
-    "int[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*=1;"
+    "int[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*1[ \t]*;"
     outer_declaration
     "${obfuscated_source}"
 )
 set(outer_name "${CMAKE_MATCH_1}")
 string(REGEX MATCH
-    "int[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*=7;"
+    "int[ \t]+([A-Za-z_][A-Za-z0-9_]*)[ \t]*=[ \t]*7[ \t]*;"
     inner_declaration
     "${obfuscated_source}"
 )

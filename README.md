@@ -237,10 +237,14 @@ Only the preprocessor configuration selected by those arguments has a full
 AST. Identifiers found in excluded conditional blocks are conservatively left
 unchanged so that another macro configuration is not silently broken.
 
-The output pass also removes selected whitespace and comments, inserts a
-side-effect-free opaque-false branch into braced `if` statements, and replaces
-supported punctuators with C digraphs or trigraphs. The opaque predicate uses
-only unsigned arithmetic and never evaluates the original condition again.
+The output pass removes comments, preserves source trivia needed to keep token
+boundaries, inserts a side-effect-free opaque-false branch into braced `if`
+statements, and replaces supported punctuators with C digraphs or trigraphs.
+Adjacent lexical tokens are checked with Clang's raw lexer so that constructs
+such as `value + +other` cannot turn into `value++other`. LibTooling builds also
+parse the completed output again before atomically replacing the destination
+file. The opaque predicate uses only unsigned arithmetic and never evaluates
+the original condition again.
 
 ## Preprocessor directives
 

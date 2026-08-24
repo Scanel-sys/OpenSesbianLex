@@ -42,7 +42,7 @@ PREPROCESSOR_DIRECTIVE          [ \t]*#[^\r\n]*(\\\r?\n[^\r\n]*)*
 %%
 
 <INITIAL>^{PREPROCESSOR_DIRECTIVE} {
-                    BeginToken(yytext);
+                    BeginPreprocessorDirective(yytext);
                     return ClassifyPreprocessorDirective(yytext);
                   }
 
@@ -52,7 +52,7 @@ PREPROCESSOR_DIRECTIVE          [ \t]*#[^\r\n]*(\\\r?\n[^\r\n]*)*
 <INITIAL>"/*"     {
                     /* A C comment is replaced by whitespace so adjacent
                        tokens cannot merge after obfuscation. */
-                    BeginToken(" ");
+                    BeginTrivia(" ");
                     BEGIN(ML_COMMENT);
                   }
 <ML_COMMENT>"*/"  {
@@ -61,7 +61,7 @@ PREPROCESSOR_DIRECTIVE          [ \t]*#[^\r\n]*(\\\r?\n[^\r\n]*)*
 <ML_COMMENT>\r?\n   {
                     /* Keep source line boundaries for directives,
                        diagnostics, and following tokens. */
-                    BeginToken(yytext);
+                    BeginTrivia(yytext);
                   }
 <ML_COMMENT>.     {
                   }
@@ -177,42 +177,42 @@ restrict        { if_type = 1; BeginToken(yytext); return RESTRICT; }
                 }
 
 <INITIAL>[\"]   {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                     BEGIN(STR);
                   }
 
 <STR>[\"]       {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                     BEGIN(INITIAL);
                     return STRING;
                   }
 
 <STR>[^\\\r\n\"]+ {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                   }
 
 <STR>\\\r?\n     {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                   }
 
 <STR>\\[0-7]{1,3} {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                   }
 
 <STR>\\x{HEX_DIGIT}+ {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                   }
 
 <STR>\\u{HEX_DIGIT}{4} {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                   }
 
 <STR>\\U{HEX_DIGIT}{8} {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                   }
 
 <STR>\\.         {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                     switch (yytext[1]) {
                       case '\'': case '"': case '?': case '\\':
                       case 'a': case 'b': case 'f': case 'n':
@@ -225,34 +225,34 @@ restrict        { if_type = 1; BeginToken(yytext); return RESTRICT; }
                   }
 
 <STR>\\          {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                     BEGIN(STR_RECOVERY);
                     return INVALID_STRING;
                   }
 
 <STR>\r?\n       {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                     BEGIN(INITIAL);
                     return INVALID_STRING;
                   }
 
 <STR><<EOF>>      {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                     BEGIN(INITIAL);
                     return INVALID_STRING;
                   }
 
 <STR_RECOVERY>[^\"\r\n]+ {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                   }
 
 <STR_RECOVERY>[\"] {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                     BEGIN(INITIAL);
                   }
 
 <STR_RECOVERY>\r?\n {
-                    BeginToken(yytext);
+                    BeginLiteralFragment(yytext);
                     BEGIN(INITIAL);
                   }
 
@@ -262,15 +262,12 @@ restrict        { if_type = 1; BeginToken(yytext); return RESTRICT; }
                   }
 
 [ \r\t]         {
-                    if (if_type != 0)
-                    {
-                        BeginToken(yytext);
-                    }
+                    BeginTrivia(yytext);
                     if_type = 0;
                   }
 
 \n                {
-                    BeginToken(yytext);
+                    BeginTrivia(yytext);
                     if_type = 0;
                   }
 

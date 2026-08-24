@@ -2,6 +2,7 @@
 #include "AtomicFileWriter.hpp"
 #include "IdentifierResolver.hpp"
 #include "LibToolingFrontend.hpp"
+#include "TokenEmitter.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -73,9 +74,10 @@ ReadLineResult getNextLine();
 
 struct ObfuscationToken
 {
-    std::string text;
-    bool        isIdentifier = false;
-    std::size_t sourceIndex  = std::numeric_limits<std::size_t>::max();
+    std::string       text;
+    bool              isIdentifier = false;
+    std::size_t       sourceIndex  = std::numeric_limits<std::size_t>::max();
+    TokenEmissionKind emissionKind = TokenEmissionKind::Lexical;
 };
 
 class BracesQueue
@@ -109,12 +111,12 @@ public:
 
     void setIdentifiersAlreadyResolved(bool value) { identifiersAlreadyResolved_ = value; }
 
-    void processToken(const char* token, bool isIdentifier)
+    void processToken(const char* token, bool isIdentifier, TokenEmissionKind emissionKind)
     {
         const std::string tokenText(token);
         const std::size_t sourceIndex = sourceTokens_.size();
         sourceTokens_.push_back({ tokenText, isIdentifier });
-        const ObfuscationToken obfuscationToken{ tokenText, isIdentifier, sourceIndex };
+        const ObfuscationToken obfuscationToken{ tokenText, isIdentifier, sourceIndex, emissionKind };
 
         if (if_processing != 0)
         {
@@ -162,17 +164,12 @@ public:
         }
         obfuscatePunctuators();
 
-        const ObfuscationToken* previous = nullptr;
+        TokenEmitter emitter(output);
         for (const ObfuscationToken& token : outputTokens_)
         {
-            if (previous != nullptr && needsIdentifierSeparator(*previous, token))
-            {
-                output << ' ';
-            }
-            output << token.text;
-            previous = &token;
+            emitter.write(token.text, token.emissionKind);
         }
-        return output.good();
+        return emitter.good();
     }
 
 private:
@@ -187,21 +184,6 @@ private:
     std::uint32_t seed_                       = 0x9e3779b9u;
     bool          identifiersAlreadyResolved_ = false;
 
-    static bool isIdentifierCharacter(char character)
-    {
-        const unsigned char value = static_cast<unsigned char>(character);
-        return std::isalnum(value) != 0 || character == '_';
-    }
-
-    static bool needsIdentifierSeparator(const ObfuscationToken& previous, const ObfuscationToken& current)
-    {
-        if (previous.text.empty() || current.text.empty() || (!previous.isIdentifier && !current.isIdentifier))
-        {
-            return false;
-        }
-        return isIdentifierCharacter(previous.text.back()) && isIdentifierCharacter(current.text.front());
-    }
-
     static void appendTokens(std::vector<ObfuscationToken>& destination, const std::vector<ObfuscationToken>& source, std::size_t start, std::size_t count)
     {
         for (std::size_t index = start; index < start + count; ++index)
@@ -210,7 +192,7 @@ private:
         }
     }
 
-    void pushOutputToken(const std::string& text) { outputTokens_.push_back({ text, false, std::numeric_limits<std::size_t>::max() }); }
+    void pushOutputToken(const std::string& text) { outputTokens_.push_back({ text, false, std::numeric_limits<std::size_t>::max(), TokenEmissionKind::Lexical }); }
 
     static std::string unsignedLiteral(std::uint32_t value)
     {
@@ -479,6 +461,20 @@ void printUsage(const char* programName)
                  " [--clang-arg <argument>]..."
                  " <input-file> [output-file]\n";
 }
+
+void printFrontendDiagnostics(const std::string& diagnostics)
+{
+    if (diagnostics.empty())
+    {
+        return;
+    }
+
+    std::cerr << diagnostics;
+    if (diagnostics.back() != '\n')
+    {
+        std::cerr << '\n';
+    }
+}
 }  // namespace
 
 bool UseLegacyOpaquePredicatePass()
@@ -587,7 +583,9 @@ void DumpRow()
     }
 }
 
-void BeginToken(const char* token)
+namespace
+{
+void beginToken(const char* token, TokenEmissionKind emissionKind)
 {
     if (token == nullptr)
     {
@@ -597,7 +595,7 @@ void BeginToken(const char* token)
     const bool isIdentifier = if_id != 0;
     if_id                   = 0;
 
-    obfuscator.processToken(token, isIdentifier);
+    obfuscator.processToken(token, isIdentifier, emissionKind);
 
     tokenStart     = nextTokenStart;
     tokenLength    = std::strlen(token);
@@ -612,6 +610,27 @@ void BeginToken(const char* token)
     {
         std::cout << "Token '" << dumpString(token) << "' at " << yylloc.first_column << ':' << yylloc.last_column << " next at " << nextTokenStart << '\n';
     }
+}
+}  // namespace
+
+void BeginToken(const char* token)
+{
+    beginToken(token, TokenEmissionKind::Lexical);
+}
+
+void BeginTrivia(const char* token)
+{
+    beginToken(token, TokenEmissionKind::Trivia);
+}
+
+void BeginLiteralFragment(const char* token)
+{
+    beginToken(token, TokenEmissionKind::LiteralFragment);
+}
+
+void BeginPreprocessorDirective(const char* token)
+{
+    beginToken(token, TokenEmissionKind::PreprocessorDirective);
 }
 
 int GetNextChar(char* destination, int maxBuffer)
@@ -760,14 +779,7 @@ int main(int argc, char* argv[])
         options.seed                            = seed;
         options.compilerArguments               = clangArguments;
         const LibToolingFrontendResult frontend = RunLibToolingFrontend(inputPath, source, options);
-        if (!frontend.diagnostics.empty())
-        {
-            std::cerr << frontend.diagnostics;
-            if (frontend.diagnostics.back() != '\n')
-            {
-                std::cerr << '\n';
-            }
-        }
+        printFrontendDiagnostics(frontend.diagnostics);
         if (frontend.status != LibToolingFrontendStatus::Success)
         {
             return static_cast<int>(frontend.status == LibToolingFrontendStatus::SyntaxError ? ExitCode::SyntaxError : ExitCode::FrontendError);
@@ -828,8 +840,20 @@ int main(int argc, char* argv[])
         return static_cast<int>(ExitCode::InputError);
     }
 
+    const std::string generatedSource = outputBuffer.str();
+    if (useLibToolingFrontend)
+    {
+        const LibToolingFrontendResult validation = ValidateOpenCLSource(inputPath, generatedSource, clangArguments);
+        printFrontendDiagnostics(validation.diagnostics);
+        if (validation.status != LibToolingFrontendStatus::Success)
+        {
+            std::cerr << "Error: generated OpenCL output failed final validation; the output file was not modified.\n";
+            return static_cast<int>(validation.status == LibToolingFrontendStatus::SyntaxError ? ExitCode::SyntaxError : ExitCode::FrontendError);
+        }
+    }
+
     std::string outputError;
-    if (!WriteFileAtomically(outputPath, outputBuffer.str(), outputError))
+    if (!WriteFileAtomically(outputPath, generatedSource, outputError))
     {
         std::cerr << "Error: failed to write output file '" << outputPath << "': " << outputError << ".\n";
         return static_cast<int>(ExitCode::InputError);

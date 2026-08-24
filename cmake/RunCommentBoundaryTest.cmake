@@ -28,9 +28,9 @@ file(READ "${INPUT}" input_source)
 file(READ "${OUTPUT}" obfuscated_source)
 
 foreach(required_pattern
-    "int[ \t\r\n]+[A-Za-z_][A-Za-z0-9_]*[ \t]*=1;"
-    "int[ \t\r\n]+[A-Za-z_][A-Za-z0-9_]*[ \t]*=2;"
-    "=[A-Za-z_][A-Za-z0-9_]*[+] [+][A-Za-z_][A-Za-z0-9_]*;"
+    "int[ \t\r\n]+[A-Za-z_][A-Za-z0-9_]*[ \t]*=[ \t]*1[ \t]*;"
+    "int[ \t\r\n]+[A-Za-z_][A-Za-z0-9_]*[ \t]*=[ \t]*2[ \t]*;"
+    "=[ \t]*[A-Za-z_][A-Za-z0-9_]*[+][ \t]+[+][A-Za-z_][A-Za-z0-9_]*[ \t]*;"
 )
     if(NOT obfuscated_source MATCHES "${required_pattern}")
         message(

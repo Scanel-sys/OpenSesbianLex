@@ -22,6 +22,13 @@ if(DEFINED INPUT)
 
     list(APPEND parser_command "${INPUT}")
     set(test_subject "${INPUT}")
+
+    if(DEFINED OUTPUT)
+        get_filename_component(output_directory "${OUTPUT}" DIRECTORY)
+        file(MAKE_DIRECTORY "${output_directory}")
+        file(REMOVE "${OUTPUT}")
+        list(APPEND parser_command "${OUTPUT}")
+    endif()
 endif()
 
 execute_process(
